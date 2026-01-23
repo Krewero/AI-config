@@ -1,0 +1,187 @@
+{
+  // Schema ufficiale per validation/autocomplete editor
+  "$schema": "https://opencode.ai/config.json",
+
+  //Plugins
+  "plugin": [
+    "opencode-antigravity-auth@latest",
+    "opencode-beads@latest",
+    "@tarquinen/opencode-dcp@latest"
+  ],
+
+  //Provider + modelli disponibili
+  "provider": {
+    "google": {
+      "models": {
+
+        "antigravity-claude-opus-4-5-thinking": {
+          "name": "Claude Opus 4.5 Thinking (Antigravity)",
+          "limit": { "context": 200000, "output": 64000 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+          "variants": {
+            "low": { "thinkingConfig": { "thinkingBudget": 8192 } },
+            "max": { "thinkingConfig": { "thinkingBudget": 32768 } }
+          }
+        },
+
+        "antigravity-claude-sonnet-4-5-thinking": {
+          "name": "Claude Sonnet 4.5 Thinking (Antigravity)",
+          "limit": { "context": 200000, "output": 64000 },
+          "modalities": { "input": ["text", "image", "pdf"], "output": ["text"] },
+          "variants": {
+            "low": { "thinkingConfig": { "thinkingBudget": 8192 } },
+            "max": { "thinkingConfig": { "thinkingBudget": 32768 } }
+          }
+        },
+      }
+    }
+  },
+
+  //Configurazione server locale OpenCode
+  "server": {
+    "port": 4096,
+    "hostname": "localhost",
+    "mdns": true,
+    "cors": ["http://localhost:5173"]
+  },
+
+  //Agente impostato di default
+  "default_agent": "plan",
+
+  //Impostazione aggiornamento automatico
+  "autoupdate": "notify",
+
+  //Impostazione condivisione sessioni
+  "share": "disabled",
+
+  //Tema predefinito
+  "theme": "ayu-dark",
+
+  //Modello di default + small_model
+  "model": "google/antigravity-claude-opus-4-5-thinking",
+
+  //TUI: Impostazioni terminale
+  "tui": {
+    "scroll_speed": 3,
+    "scroll_acceleration": { "enabled": true },
+    "diff_style": "auto"
+  },
+
+  //Watcher ignore: Directory da ignorare
+  "watcher": {
+    "ignore": [
+      "node_modules/**",
+      "dist/**",
+      ".git/**",
+      ".gitattributes/**",
+      ".evo/**",
+      ".yo-rc.json",
+      "yo-rc-global.json"
+    ]
+  },
+
+  //Compaction: Token compation
+  "compaction": {
+    "auto": true,
+    "prune": true
+  },
+
+  //Instructions: cartella globale
+  "instructions": [
+     "~.config\\opencode\\instructions\\*.md"
+  ],
+
+  //Permission baseline
+  "permission": {
+    "read": "allow",
+    "list": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "lsp": "ask",
+    "skill": "allow",
+    "todoread": "allow",
+    "todowrite": "allow",
+    "webfetch": "allow",
+    "task": "allow",
+    "edit": "deny",
+    "bash": "allow",
+    "external_directory": "ask",
+    "doom_loop": "ask"
+  },
+
+  //Agents configuration
+  "agent": {
+
+    // Disable or neutralize built-in Build agent
+    "Build": {
+      "disable": true
+    },
+
+    "Plan": {
+        "permission": {
+        "edit": "deny",  
+        "bash": "allow",
+        "webfetch": "allow",
+        "task": "allow",
+        "read": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "grep": "allow"
+      }
+    },
+
+    // Primary agent for implementation
+    "Developer": {
+      "description": "Developer agent. Implements one task at a time from tasks.yaml, modifying code as needed and producing human-readable diffs. Follow the global rules in AGENTS.md, the workflow in instructions/workflow.md, the coding rules in instructions/developer-standards.md, and the tasks format in instructions/tasks-schema.md.",
+      "mode": "subagent",
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "low",
+      "permission": {
+        "edit": "allow",  
+        "bash": "deny",
+        "webfetch": "allow",
+        "task": "allow",
+        "read": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "grep": "allow"
+      }
+    },
+
+    // Primary agent for strict code review
+    "Reviewer": {
+      "description": "Reviewer agent. Performs a strict, read-only review of code changes (both AI and human). Follow the global rules in AGENTS.md, the workflow in instructions/workflow.md, and the checklist in instructions/review-checklist.md.",
+      "mode": "primary",
+      "model": "google/antigravity-claude-opus-4-5-thinking",
+      "variant": "low",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny",
+        "webfetch": "allow",
+        "task": "allow",
+        "read": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "grep": "allow"
+      }
+    },
+
+    // Subagent for commit procedures and tasks.yaml updates
+    "Repo Organizer": {
+      "description": "Repo Organizer agent. Proposes Git and SVN command sequences and how to update the current task in tasks.yaml after work is accepted. Follow the global rules in AGENTS.md, the workflow in instructions/workflow.md, and the tasks format in instructions/tasks-schema.md. You may only edit tasks.yaml when I explicitly confirm it.",
+      "mode": "subagent",
+      "model": "google/antigravity-gemini-3-flash",
+      "variant": "minimal",
+      "permission": {
+        "edit": "allow",
+        "bash": "deny",
+        "webfetch": "allow",
+        "task": "allow",
+        "read": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "grep": "allow"
+      }
+    }
+  }
+}
