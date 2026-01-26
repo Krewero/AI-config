@@ -55,7 +55,7 @@
     "prune": true
   },
 
-  //Permission baseline
+  // Permission baseline (nota: git* / github* qui sono solo policy, il gating reale è in "tools")
   "permission": {
     "read": "allow",
     "list": "allow",
@@ -69,11 +69,20 @@
     "task": "allow",
     "edit": "allow",
     "bash": "allow",
+    "git*": "allow",
+    "github*": "allow",
+    "memory*": "allow",
     "external_directory": "ask",
     "doom_loop": "ask"
   },
 
-  "agents": {
+  "tools": {
+    "git*": false,
+    "github*": false,
+    "memory*": false
+  },
+
+  "agent": {
     "Command_Runner": {
       "description": "Specialized agent for executing user-provided shell commands, initialization routines. Strictly limited to command execution and basic file creation like tasks.yaml; does not plan, write code, or perform analysis.",
       "prompt": "{file:./prompts/command_runner.txt}",
@@ -92,7 +101,14 @@
         "webfetch": "deny",
         "task": "deny"
       },
-      "tools": ["bash", "list", "glob", "write"],
+      "tools": {
+        "bash": true,
+        "list": true,
+        "glob": true,
+        "write": true,
+        "git*": false,
+        "github*": false
+      },
       "max_steps": 5,
       "temperature": 0.1
     },
@@ -115,9 +131,28 @@
         "webfetch": "allow",
         "task": "allow"
       },
-      "tools": ["read", "write", "edit", "glob", "bash", "task", "skill"],
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "glob": true,
+        "bash": true,
+        "task": true,
+        "skill": true,
+        "git*": false,
+        "github*": false,
+        "memory*": true
+      },
       "max_steps": 10,
       "temperature": 0.2
+    },
+
+    "plan": {
+      "tools": {
+        "git*": true,
+        "github*": true,
+        "memory*": true
+      }
     },
 
     "Code_Reviewer": {
@@ -138,7 +173,17 @@
         "webfetch": "allow",
         "task": "deny"
       },
-      "tools": ["read", "glob", "grep", "lsp", "bash", "skill", "webfetch"],
+      "tools": {
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "lsp": true,
+        "bash": true,
+        "skill": true,
+        "webfetch": true,
+        "git*": false,
+        "github*": false
+      },
       "max_steps": 10,
       "temperature": 0.1
     },
@@ -153,7 +198,7 @@
         "list": "allow",
         "glob": "allow",
         "grep": "allow",
-        "bash": "allow",
+        "bash": "deny",
         "edit": "deny",
         "write": "allow",
         "lsp": "deny",
@@ -161,9 +206,55 @@
         "webfetch": "deny",
         "task": "deny"
       },
-      "tools": ["bash", "glob", "grep", "read", "list", "write", "skill"],
+      "tools": {
+        "bash": false,
+        "glob": true,
+        "grep": true,
+        "read": true,
+        "list": true,
+        "write": true,
+        "skill": true,
+        "git*": true,
+        "github*": true
+      },
       "max_steps": 8,
       "temperature": 0.1
+    }
+  },
+
+  "mcp": {
+    "git": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "@cyanheads/git-mcp-server"],
+      "environment": {
+        "MCP_TRANSPORT_TYPE": "stdio",
+        "MCP_LOG_LEVEL": "info",
+        "GIT_SIGN_COMMITS": "false"
+      },
+      "enabled": true,
+      "timeout": 15000
+    },
+
+    "github": {
+      "type": "remote",
+      "url": "https://api.githubcopilot.com/mcp",
+      "headers": {
+        "X-MCP-Toolsets": "default",
+        "X-MCP-Readonly": "true",
+        "Authorization": "Bearer {env:OC_GITHUB_PAT}"
+      },
+      "enabled": true,
+      "timeout": 15000
+    },
+
+    "memory": {
+      "type": "local",
+      "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
+      "environment": {
+        "MEMORY_FILE_PATH": "{env:USERPROFILE}\\.config\\opencode\\memory.jsonl"
+      },
+      "enabled": true,
+      "timeout": 15000
     }
   }
 }
