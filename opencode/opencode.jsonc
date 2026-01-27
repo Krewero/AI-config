@@ -19,6 +19,31 @@
 
   //Agente impostato di default
   "default_agent": "plan",
+  
+  "instructions": [
+    "{env:USERPROFILE}\\.config\\opencode\\AGENTS.md",
+    "{env:USERPROFILE}\\.config\\opencode\\instructions\\*.md"
+  ],
+
+  "command": {
+    "create-task-file": {
+    "description": "Create standard tasks.yaml file in project root",
+    "template": "@Task_Manager Create a tasks.yaml file in the project root following the schema defined in the instructions (tasks-system.md). Initialize it with one sample task for project setup with status DONE. Use current date for created and updated fields.",
+    "agent": "Task_Manager"
+    },
+
+    "add-task": {
+      "description": "Add a new task to tasks.yaml",
+      "template": "@Task_Manager Add a new task to tasks.yaml based on this input:\n\n{{input}}\n\nParse the input to extract title and description, assign the next available ID, set status to TODO, use medium priority by default, and add current date for created/updated fields.",
+      "agent": "Task_Manager"
+    },
+
+    "review": {
+      "description": "Review recent code changes against tasks and best practices",
+      "template": "@Code_Reviewer Review the code changes made in this session using the code-review-checklist skill. Verify alignment with current task requirements from tasks.yaml, check code quality and best practices, identify potential issues. Provide clear APPROVE or REJECT decision with actionable feedback.",
+      "agent": "Code_Reviewer"
+    }
+  },
 
   //Impostazione aggiornamento automatico
   "autoupdate": "notify",

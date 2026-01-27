@@ -90,7 +90,7 @@ Goal: “Enable persistent memory MCP for the project”
 
 ## Beads integration (incident-only persistence)
 - `tasks.yaml` is the single source of truth for task status, notes, and acceptance criteria.
-- If the `opencode-beads` plugin is enabled, Beads is used only as an emergency persistence/continuity layer (e.g., incident recovery, context loss), not as the day-to-day task manager. [page:1][page:0]
+- If the `opencode-beads` plugin is enabled, Beads is used only as an emergency persistence/continuity layer (e.g., incident recovery, context loss), not as the day-to-day task manager.
 - Do not create a parallel workflow where the same task is actively managed in both places.
 - If Beads is used during recovery, treat it as a reference to reconstruct `tasks.yaml`, then make `tasks.yaml` authoritative again.
 - When there is a conflict between Beads and `tasks.yaml`, assume `tasks.yaml` is correct and update any recovered notes accordingly.
