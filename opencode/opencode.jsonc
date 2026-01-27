@@ -21,8 +21,8 @@
   "default_agent": "plan",
   
   "instructions": [
-    "{env:USERPROFILE}\\.config\\opencode\\AGENTS.md",
-    "{env:USERPROFILE}\\.config\\opencode\\instructions\\*.md"
+    "C:/Utenti/PC-3/.config/opencode/AGENTS.md",
+    "C:/Utenti/PC-3/.config/opencode/instructions/*.md"
   ],
 
   "command": {
@@ -42,6 +42,12 @@
       "description": "Review recent code changes against tasks and best practices",
       "template": "@Code_Reviewer Review the code changes made in this session using the code-review-checklist skill. Verify alignment with current task requirements from tasks.yaml, check code quality and best practices, identify potential issues. Provide clear APPROVE or REJECT decision with actionable feedback.",
       "agent": "Code_Reviewer"
+    },
+
+    "commit": {
+      "description": "Generate Git/SVN commit commands for current changes",
+      "template": "@Repo_Manager Using the repo-commit-conventions skill, analyze the changes in this session and generate commit commands for both Git and SVN (if applicable). Use conventional commit format based on tasks.yaml context. Provide copy-paste ready shell commands.",
+      "agent": "Repo_Manager"
     }
   },
 
@@ -52,7 +58,7 @@
   "share": "disabled",
 
   //Tema predefinito
-  "theme": "ayu-dark",
+  "theme": "ayu",
 
   //TUI: Impostazioni terminale
   "tui": {
@@ -276,7 +282,7 @@
       "type": "local",
       "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
       "environment": {
-        "MEMORY_FILE_PATH": "{env:USERPROFILE}\\.config\\opencode\\memory.jsonl"
+        "MEMORY_FILE_PATH": "C:/Utenti/PC-3/.config/opencode/memory.jsonl"
       },
       "enabled": true,
       "timeout": 15000
