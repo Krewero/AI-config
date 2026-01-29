@@ -27,7 +27,7 @@ Secondary:
   - Notes and constraints
   - AI delegation flags
   - Path hints and safety boundaries
-  - Beads metadata stored inside tasks.yaml
+  - Beads metadata stored inside each task
 
 Beads is **non-authoritative** and is used only by the AI to persist in-flight execution context and recover after incidents.
 
@@ -38,11 +38,11 @@ tasks.yaml MUST follow this structure:
 
 ```yaml
 tasks:
-  - id: "T-001"
+  - id: T-0001
     title: "Short description of the task"
-    status: "TODO"        # TODO | DOING | DONE | BLOCKED | SKIP
+    status: TODO        # TODO | DOING | DONE | BLOCKED | SKIP
     delegable: true       # true if this task can be delegated to the AI
-    priority: 1           # optional integer (1 = highest priority)
+    priority: 1           # integer (1 = highest priority, 5 = lowest)
     paths_hint:
       - "src/main/java/..."
       - "src/test/java/..."
@@ -51,29 +51,35 @@ tasks:
     notes: |
       Free-form text for additional context
       (bug reproduction steps, business notes, links, extra constraints)
-    beads: {}  # optional per-task beads metadata, may be omitted if not used yet
-
-# Top-level Beads metadata (AI-only)
-beads:
-  enabled: true
-  mode: "ai-only"
-  mapping:
-    by_task_id: {}  # task_id -> bead_id (string)
-  sync:
-    last_sync_at: null
-    last_error: null
+    beads:                # AI-managed metadata for task persistence and recovery
+      bead_id: null       # Beads issue ID linked to this task (string when mirrored, else null)
+      mirrored: false     # true when task is mirrored in Beads (DOING/BLOCKED status)
+      last_sync_at: null  # ISO timestamp of last beads sync
+      last_error: null    # Last error encountered during beads sync (if any)
+      session_id: null    # Session ID currently working on this task
+      agent: null         # Agent name that last worked on this task
 ```
 
 ## Field definitions (per task)
-- **id** (required): stable identifier (e.g., T-001), MUST NOT change.
+- **id** (required): stable task identifier in format T-NNNN (e.g., T-0001, T-0002), MUST NOT change.
 - **title** (required): short, imperative, unambiguous.
 - **status** (required): TODO | DOING | DONE | BLOCKED | SKIP.
 - **delegable** (required): whether AI agents are allowed to execute this task.
-- **priority** (optional): integer where 1 is highest priority.
+- **priority** (required): integer where 1 is highest priority, 5 is lowest.
 - **paths_hint** (optional): list of likely relevant paths; helps reduce search ambiguity.
 - **dont_touch_paths** (optional): hard safety boundary; agents MUST NOT edit files under these paths.
-- **notes** (optional, recommended): free-form context; keep it factual and decision-oriented.
-- **beads** (optional): per-task Beads metadata; see "Beads integration" section.
+- **notes** (optional): free-form context; keep it factual and decision-oriented.
+- **beads** (required): AI-managed metadata object for task persistence; see field definitions below.
+
+## Beads field definitions (per task)
+- **bead_id**: Beads issue identifier when task is mirrored (string), else null.
+- **mirrored**: Boolean flag indicating if task is currently mirrored in Beads system.
+- **last_sync_at**: ISO 8601 timestamp of last beads synchronization.
+- **last_error**: Error message from last sync attempt (null if no errors).
+- **session_id**: Current session identifier working on this task.
+- **agent**: Name of the agent that last modified this task.
+
+All beads fields default to null (or false for mirrored) when task is created. When task status becomes DONE or SKIP, beads metadata is left as-is for historical tracking.
 
 ## Status semantics
 - **TODO**: Not started.
@@ -113,30 +119,9 @@ Beads must be used exclusively by the AI to provide persistence during execution
 ### 3) Mirroring policy
 - Mirror ONLY tasks with status: DOING or status: BLOCKED.
 - Do NOT mirror tasks with status: TODO, DONE, or SKIP.
+- Update task.beads.mirrored accordingly.
 
-### 4) Required top-level Beads section (authoritative mapping)
-The top-level **beads.mapping.by_task_id** is the canonical mapping:
-- **key**: task_id (e.g., T-001)
-- **value**: bead_id (string)
-
-### 5) Per-task beads object (task-local metadata)
-Each task may contain **beads: {}** to store task-specific metadata and avoid ambiguity.
-
-Recommended keys inside task.beads:
-
-```yaml
-beads:
-  bead_id: null           # string when created, else null
-  mirrored: false         # true when DOING/BLOCKED is mirrored into Beads
-  last_sync_at: null      # ISO timestamp
-  last_error: null        # short, non-sensitive error
-```
-
-Rules:
-- **task.beads.bead_id** MUST match **beads.mapping.by_task_id[task_id]** when present.
-- If both exist and differ, treat tasks.yaml as corrupted state and stop for clarification.
-
-### 6) What can be stored in Beads issues
+### 4) What can be stored in external Beads issues
 **Allowed** (recovery-oriented only):
 - Immediate next action
 - Copy-paste commands to run (do not execute)
@@ -152,15 +137,15 @@ Rules:
 ## Task_Manager responsibilities (mandatory)
 **Task_Manager MUST:**
 - Enforce schema and keep tasks.yaml consistent.
-- Ensure every task has a stable id.
+- Ensure every task has a stable task id in format T-NNNN with zero-padding.
+- Next ID calculation: parse existing IDs, find max number, increment by 1, format as T-NNNN.
 - When a task becomes DOING or BLOCKED:
-  - Create or update the Beads issue (AI-only),
-  - Update BOTH:
-    - beads.mapping.by_task_id[task_id],
-    - task.beads fields (bead_id, mirrored, last_sync_at, last_error).
+  - Create or update the external Beads issue (AI-only),
+  - Update task.beads fields: bead_id, mirrored (true), last_sync_at, session_id, agent.
 - When a task becomes DONE or SKIP:
-  - Update tasks.yaml only.
-  - Optionally leave the Beads issue as historical context, but do not maintain a parallel workflow.
+  - Update status in tasks.yaml.
+  - Leave task.beads fields as-is for historical tracking.
+  - Optionally leave the external Beads issue as historical context.
 
 **Task_Manager MUST NOT:**
 - Change task status based on Beads alone.
@@ -172,14 +157,14 @@ Rules:
 ## Incident recovery procedure
 When recovering from an incident:
 1. Read ./tasks.yaml first (authoritative).
-2. Identify tasks in DOING or BLOCKED and their id.
+2. Identify tasks in DOING or BLOCKED status.
 3. For each in-flight task:
-   - Resolve bead linkage via beads.mapping.by_task_id[id] (preferred),
-   - Validate against task.beads.bead_id if present.
-4. Recover missing execution context from Beads and write it into task.notes (or other task fields).
-5. Continue work with tasks.yaml as authoritative.
+   - Check task.beads.bead_id to find linked Beads issue.
+   - Recover missing execution context from external Beads issue.
+   - Write recovered context into task.notes or other task fields.
+4. Continue work with tasks.yaml as authoritative.
 
 ## Conflict resolution
-If Beads and tasks.yaml disagree:
+If external Beads and tasks.yaml disagree:
 - **tasks.yaml wins** for status and task definition.
 - Use Beads only to reconstruct missing context, then write it back to tasks.yaml.

@@ -21,33 +21,46 @@
   "default_agent": "plan",
   
   "instructions": [
-    "C:/Utenti/PC-3/.config/opencode/AGENTS.md",
-    "C:/Utenti/PC-3/.config/opencode/instructions/*.md"
+    "C:/Users/PC-3/.config/opencode/AGENTS.md",
+    "C:/Users/PC-3/.config/opencode/instructions/*.md"
   ],
 
   "command": {
+
+    "init-git": {
+      "description": "Initialize Git repository with .gitignore",
+      "template": "@Repo_Manager Initialize Git repository:\n\n1. Run: git init\n2. Create .gitignore file (only if it doesn't already exist) with appropriate entries for this project type based on the codebase analysis",
+      "agent": "Command_Runner"
+    },
+
+    "init": {
+      "description": "create/update AGENTS.md",
+      "template": "@build Please analyze this codebase and create an AGENTS.md file containing:\n\n1. Build and lint commands\n2. Code style guidelines including:\n   - Import conventions\n   - Formatting rules\n   - Type usage\n   - Naming conventions\n   - Error handling patterns\n   - Any company-specific coding standards\n\nThe file you create will be given to agentic coding agents (such as yourself) that operate in this  sitory. Make it about 150 lines long.\n\nIf there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (in .github/copilot-instructions.md), make sure to include them.\n\nIf there's already an AGENTS.md in the root, improve it based on the current codebase.",
+      "agent": "Command_Runner"
+    },
+
     "create-task-file": {
-    "description": "Create standard tasks.yaml file in project root",
-    "template": "@Task_Manager Create a tasks.yaml file in the project root following the schema defined in the instructions (tasks-system.md). Initialize it with one sample task for project setup with status DONE. Use current date for created and updated fields.",
-    "agent": "Task_Manager"
+      "description": "Create standard tasks.yaml file in project root",
+      "template": "@Task_Manager Create a tasks.yaml file in the project root following the schema defined in the instructions (tasks-system.md). Initialize it with one sample task for project setup with status DONE. Use current date for created and updated fields.",
+      "agent": "Command_Runner"
     },
 
     "add-task": {
       "description": "Add a new task to tasks.yaml",
-      "template": "@Task_Manager Add a new task to tasks.yaml based on this input:\n\n{{input}}\n\nParse the input to extract title and description, assign the next available ID, set status to TODO, use medium priority by default, and add current date for created/updated fields.",
-      "agent": "Task_Manager"
+      "template": "@Task_Manager Add a new task to tasks.yaml based on this input:\n\n$ARGUMENTS\n\nParse the input to extract title and description, assign the next available ID, set status to TODO, use priority 3 (medium) by default, and add current date for created/updated fields.",
+      "agent": "Command_Runner"
     },
 
     "review": {
       "description": "Review recent code changes against tasks and best practices",
       "template": "@Code_Reviewer Review the code changes made in this session using the code-review-checklist skill. Verify alignment with current task requirements from tasks.yaml, check code quality and best practices, identify potential issues. Provide clear APPROVE or REJECT decision with actionable feedback.",
-      "agent": "Code_Reviewer"
+      "agent": "Command_Runner"
     },
 
     "commit": {
       "description": "Generate Git/SVN commit commands for current changes",
       "template": "@Repo_Manager Using the repo-commit-conventions skill, analyze the changes in this session and generate commit commands for both Git and SVN (if applicable). Use conventional commit format based on tasks.yaml context. Provide copy-paste ready shell commands.",
-      "agent": "Repo_Manager"
+      "agent": "Command_Runner"
     }
   },
 
@@ -108,14 +121,14 @@
   },
 
   "tools": {
-    "git*": false,
-    "github*": false,
-    "memory*": false
+    "git*": true,
+    "github*": true,
+    "memory*": true
   },
 
   "agent": {
     "Command_Runner": {
-      "description": "Specialized agent for executing user-provided shell commands, initialization routines. Strictly limited to command execution and basic file creation like tasks.yaml; does not plan, write code, or perform analysis.",
+      "description": "Specialized agent for executing user-provided shell commands, initialization routines. Strictly limited to command execution; does not plan, write code, or perform analysis.",
       "prompt": "{file:./prompts/command_runner.txt}",
       "reasoningEffort": "high",
       "textVerbosity": "low",
@@ -145,7 +158,7 @@
     },
 
     "Task_Manager": {
-      "description": "Manages tasks.yaml file: creates new tasks from user input, updates status (TODO/DOING/DONE/BLOCKED/SKIP), adds notes/paths, integrates beads for session-persistent memory. Reads project context and tasks history; no code implementation or planning.",
+      "description": "Manages tasks.yaml file and basic file creation like tasks.yaml: creates new tasks from user input, updates status (TODO/DOING/DONE/BLOCKED/SKIP), adds notes/paths, integrates beads for session-persistent memory. Reads project context and tasks history; no code implementation or planning.",
       "prompt": "{file:./prompts/task_manager.txt}",
       "reasoningEffort": "high",
       "textVerbosity": "medium",
@@ -220,7 +233,7 @@
     },
 
     "Repo_Manager": {
-      "description": "Generates commit commands for personal Git and company SVN repositories. Suggests conventional messages from tasks.yaml, shows status/diffs, provides copy-paste shell sequences for both.",
+      "description": "Manages Git/SVN repositories: initializes repos, creates .gitignore, generates commit commands. For commits: suggests conventional messages from tasks.yaml, shows status/diffs. For init: executes git init and creates appropriate .gitignore.",
       "prompt": "{file:./prompts/repo_manager.txt}",
       "reasoningEffort": "high",
       "textVerbosity": "medium",
@@ -256,14 +269,14 @@
   "mcp": {
     "git": {
       "type": "local",
-      "command": ["cmd", "/c", "npx", "@cyanheads/git-mcp-server"],
+      "command": ["npx", "-y", "@cyanheads/git-mcp-server"],
       "environment": {
         "MCP_TRANSPORT_TYPE": "stdio",
         "MCP_LOG_LEVEL": "info",
         "GIT_SIGN_COMMITS": "false"
       },
       "enabled": true,
-      "timeout": 15000
+      "timeout": 60000
     },
 
     "github": {
@@ -280,12 +293,12 @@
 
     "memory": {
       "type": "local",
-      "command": ["cmd", "/c", "npx", "-y", "@modelcontextprotocol/server-memory"],
+      "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],
       "environment": {
-        "MEMORY_FILE_PATH": "C:/Utenti/PC-3/.config/opencode/memory.jsonl"
+        "MEMORY_FILE_PATH": "C:/Users/PC-3/.config/opencode/memory.jsonl"
       },
       "enabled": true,
-      "timeout": 15000
+      "timeout": 60000
     }
   }
 }
