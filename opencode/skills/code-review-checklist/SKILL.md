@@ -1,6 +1,6 @@
 ---
 name: code-review-checklist
-description: Standard code review checklist for correctness, security, maintainability, performance, and operability. Provide actionable feedback and never apply changes automatically.
+description: Standard code review checklist for correctness, maintainability, performance, and operability. Provide APPROVE/REJECT decision with actionable feedback.
 compatibility: opencode
 metadata:
   scope: global
@@ -10,7 +10,8 @@ metadata:
 
 ## What I do
 - Provide a consistent, low-ambiguity code review checklist.
-- Focus on correctness, security, maintainability, performance, and operability.
+- Focus on correctness, maintainability, performance, and operability.
+- Issue a clear **APPROVE** or **REJECT** decision based on checklist results.
 - Produce actionable feedback (what/why/how) without making code changes automatically.
 
 ## When to use me
@@ -21,12 +22,25 @@ Use this skill when:
 
 ## Review output format (required)
 When reviewing, structure feedback as:
-1) **Blockers** (must fix)
-2) **Warnings** (should fix)
-3) **Suggestions** (nice to have)
-4) **Questions** (clarifications needed)
 
-For each item, include:
+1. **Decision:** `APPROVE` or `REJECT`
+2. **Checklist Results:** Mark each section ✅ (pass) or ❌ (fail)
+3. **Strengths:** 2-3 positive highlights (what was done well)
+4. **Weaknesses:** Specific issues with file/line references (only if failed)
+5. **Actionable Feedback:** What to fix if rejected (blocker items first)
+
+### Decision Criteria
+- **APPROVE:** All critical checklist items pass; minor suggestions are acceptable.
+- **REJECT:** One or more critical issues (blockers) found in checklist.
+
+### Feedback Categories
+For each issue, include:
+- **Blockers** (must fix) - Critical issues preventing approval
+- **Warnings** (should fix) - Important issues, not blocking but risky
+- **Suggestions** (nice to have) - Improvements for code quality
+- **Questions** (clarifications needed) - Unclear intent or behavior
+
+For each item, provide:
 - Location (file + function or line range if available)
 - Issue (what is wrong)
 - Impact (why it matters)
@@ -39,13 +53,6 @@ For each item, include:
 - Are there race conditions or ordering assumptions?
 - Are there off-by-one or timezone/locale issues (dates, money, rounding)?
 - Is behavior deterministic where it needs to be?
-
-### B) Security (baseline)
-- No secrets in code, logs, configs, or error messages.
-- Input validation: validate at boundaries (API, DB, queue, file).
-- Authorization: verify access control checks are present and correct.
-- Data exposure: avoid leaking internal identifiers and stack traces to clients.
-- Safe dependencies: new packages are justified and versions are constrained.
 
 ### C) Reliability & error handling
 - Errors are handled intentionally (retry vs fail-fast).
@@ -71,11 +78,6 @@ For each item, include:
 - Correlation IDs / request IDs are propagated where relevant.
 - Metrics/tracing are added for important operations (if standard in repo).
 
-### G) API & contracts
-- Public APIs keep backward compatibility (or there is a migration plan).
-- Contracts are documented (request/response, schemas, validation rules).
-- Versioning is handled when changes are breaking.
-
 ### H) Config & deployment readiness
 - Config changes are documented and have safe defaults.
 - Feature flags are used for risky changes where appropriate.
@@ -85,7 +87,61 @@ For each item, include:
 - Do not execute commands or modify files as part of code review unless explicitly requested.
 - If you cannot verify something from the diff/context, ask a question instead of guessing.
 - Prefer fewer, high-signal comments over many minor nits.
+- Always issue a clear APPROVE or REJECT decision.
+
+## Example Output
+
+### Example 1: APPROVE
+
+```
+Decision: APPROVE ✅
+
+Checklist Results:
+✅ Correctness
+✅ Reliability & error handling
+✅ Maintainability
+✅ Performance
+✅ Observability
+✅ Config & deployment readiness
+
+Strengths:
+- Clean separation of concerns in the service layer
+- Comprehensive error handling with appropriate status codes
+- Good test coverage for edge cases
+
+Suggestions:
+- Consider extracting the validation logic into a separate validator class for reusability
+```
+
+### Example 2: REJECT
+
+```
+Decision: REJECT ❌
+
+Checklist Results:
+✅ Correctness
+❌ Reliability & error handling
+✅ Maintainability
+✅ Performance
+✅ Observability
+✅ Config & deployment readiness
+
+Weaknesses (Blockers):
+- [src/api/UserController.java:45] Raw exception messages exposed to API clients
+  Impact: Sensitive internal information (stack traces, DB paths) leaked
+  Fix: Map exceptions to sanitized error responses; log full details server-side only
+
+- [src/service/PaymentService.java:89] Missing input validation on amount field
+  Impact: Negative amounts could bypass business logic
+  Fix: Add validation: amount > 0 and within acceptable range
+
+Actionable Feedback:
+- Sanitize all exception messages in API responses (blocker)
+- Add amount validation in PaymentService (blocker)
+- After fixes, re-run review
+```
 
 ## Example wording (recommended)
-- Blocker: “This endpoint returns raw exception messages; this can leak sensitive info. Please map exceptions to sanitized error responses and log details server-side.”
-- Suggestion: “Consider extracting this validation into a helper to reduce duplication and simplify testing.”
+- **Blocker:** "This endpoint returns raw exception messages; this can leak sensitive info. Please map exceptions to sanitized error responses and log details server-side."
+- **Warning:** "This query could cause N+1 problem with large datasets. Consider using a JOIN or batch loading."
+- **Suggestion:** "Consider extracting this validation into a helper to reduce duplication and simplify testing."

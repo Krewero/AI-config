@@ -1,15 +1,15 @@
 {
-  // Schema ufficiale per validation/autocomplete editor
+  // Official schema for validation and editor autocomplete
   "$schema": "https://opencode.ai/config.json",
 
-  //Plugins
+  // OpenCode plugins to load
   "plugin": [
     "opencode-antigravity-auth@latest",
     "opencode-beads@latest",
     "@tarquinen/opencode-dcp@latest"
   ],
 
-  //Configurazione server locale OpenCode
+  // Local OpenCode server configuration
   "server": {
     "port": 4096,
     "hostname": "localhost",
@@ -17,70 +17,72 @@
     "cors": ["http://localhost:5173"]
   },
 
-  //Agente impostato di default
-  "default_agent": "plan",
-  
+  // Default agent activated when OpenCode starts
+  "default_agent": "OCA",
+
+  // Global instruction files loaded for all agents
   "instructions": [
     "C:/Users/PC-3/.config/opencode/AGENTS.md",
     "C:/Users/PC-3/.config/opencode/instructions/*.md"
   ],
 
+  // Custom commands: workflow-driven command system
   "command": {
-
-    "init-git": {
-      "description": "Initialize Git repository with .gitignore",
-      "template": "@Repo_Manager Initialize Git repository:\n\n1. Run: git init\n2. Create .gitignore file (only if it doesn't already exist) with appropriate entries for this project type based on the codebase analysis",
-      "agent": "Command_Runner"
-    },
-
+    
+    // STEP 1: Override built-in /init - Project initialization
     "init": {
-      "description": "create/update AGENTS.md",
-      "template": "@build Please analyze this codebase and create an AGENTS.md file containing:\n\n1. Build and lint commands\n2. Code style guidelines including:\n   - Import conventions\n   - Formatting rules\n   - Type usage\n   - Naming conventions\n   - Error handling patterns\n   - Any company-specific coding standards\n\nThe file you create will be given to agentic coding agents (such as yourself) that operate in this  sitory. Make it about 150 lines long.\n\nIf there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (in .github/copilot-instructions.md), make sure to include them.\n\nIf there's already an AGENTS.md in the root, improve it based on the current codebase.",
-      "agent": "Command_Runner"
+      "description": "Initialize project: create AGENTS.md, tasks.yaml, .gitignore, git init, and ./plans/ directory",
+      "template": "@Project_Initializer Initialize this project following the standard workflow:\n\n**Required Actions:**\n1. Scan codebase and create AGENTS.md (~150 lines):\n   - Build/lint/test commands (especially single test execution)\n   - Code style guidelines (imports, formatting, types, naming, error handling)\n   - Include existing rules from .cursor/rules/, .cursorrules, .github/copilot-instructions.md if present\n   - Follow Java/SpringBoot/Quarkus enterprise conventions\n\n2. Create tasks.yaml in project root following tasks-system.md canonical schema\n\n3. Create .gitignore appropriate for detected stack (Java/Maven/Gradle/SpringBoot/Quarkus)\n\n4. Run 'git init' to initialize repository (required for Beads persistence)\n\n5. Create ./plans/ directory for plan storage\n\n**Context:**\n- Project path: $CWD\n- Stack hint: $ARGUMENTS\n\n**Use mcp-first skill:** Prefer Git MCP for initialization, fallback to bash only if needed."
     },
 
-    "create-task-file": {
-      "description": "Create standard tasks.yaml file in project root",
-      "template": "@Task_Manager Create a tasks.yaml file in the project root following the schema defined in the instructions (tasks-system.md). Initialize it with one sample task for project setup with status DONE. Use current date for created and updated fields.",
-      "agent": "Command_Runner"
-    },
-
+    // STEP 2: Create new task in tasks.yaml
     "add-task": {
-      "description": "Add a new task to tasks.yaml",
-      "template": "@Task_Manager Add a new task to tasks.yaml based on this input:\n\n$ARGUMENTS\n\nParse the input to extract title and description, assign the next available ID, set status to TODO, use priority 3 (medium) by default, and add current date for created/updated fields.",
-      "agent": "Command_Runner"
+      "description": "Add a new task to tasks.yaml following the canonical schema",
+      "template": "@Task_Manager Create a new task in ./tasks.yaml based on this input:\n\n$ARGUMENTS\n\n**Task Creation:**\n- Parse input to extract title and description\n- Generate next T-NNNN ID (parse existing, find max, increment, zero-pad to 4 digits)\n- Set status: TODO, delegable: true, priority: 3 (medium)\n- Initialize beads metadata with all fields null (mirrored: false)\n- Follow tasks-system.md canonical YAML structure exactly\n\n**Use task-workflow and beads-workflow skills for guidance.**"
     },
 
+    // STEP 3: Override built-in /plan - Create implementation plan
+    "plan": {
+      "description": "Create detailed implementation plan for active task (saves to ./plans/plan-<task-id>.md)",
+      "template": "@plan Create a comprehensive implementation plan for the current task.\n\n**Context Gathering:**\n1. Read ./tasks.yaml to identify active task (status: DOING)\n   - If no DOING task, ask user which TODO task to plan\n   - Extract: task ID, title, description, priority, paths_hint, dont_touch_paths, notes\n2. Use mcp-first skill: analyze codebase, review AGENTS.md conventions\n\n**Plan Requirements:**\n- Break down into atomic, testable implementation steps\n- Create step-by-step checklist for @build agent to follow sequentially\n- Identify all files to create/modify/delete\n- Note potential risks, edge cases, and dependencies\n- Respect dont_touch_paths safety boundaries\n- Include acceptance criteria from task notes\n\n**Output:**\n- Save to ./plans/plan-<task-id>.md\n- Use markdown with sections: Task Context, Analysis, Implementation Checklist, Files Affected, Risks & Mitigations, Acceptance Criteria\n\n**Task ID:** $ARGUMENTS (if not provided, infer from tasks.yaml DOING status)\n\n**Use task-workflow skill for task handling guidance.**"
+    },
+
+    // STEP 4: Override built-in /build - Implement plan
+    "build": {
+      "description": "Implement plan from ./plans/plan-<task-id>.md with step-by-step execution and diff output",
+      "template": "@build Implement the plan for the current task following the checklist.\n\n**Context Loading:**\n1. Read ./tasks.yaml to identify task ID (status: DOING)\n2. Load plan from ./plans/plan-<task-id>.md\n3. Use mcp-first skill: get context from git MCP, memory MCP\n4. Review AGENTS.md for code conventions\n\n**Implementation Protocol:**\n- Execute each checklist item sequentially (do NOT skip or reorder)\n- Generate clean, production-ready code following AGENTS.md style\n- Respect dont_touch_paths boundaries (ask for approval if needed)\n- **Output diffs for user review** (DO NOT apply changes automatically)\n- Update task notes in tasks.yaml with implementation progress\n\n**Restrictions (critical):**\n- NO test execution (unit tests, integration tests)\n- NO build/compile operations (Maven, Gradle)\n- NO deploy or lifecycle management\n- Generate code only; user handles validation\n\n**Task ID:** $ARGUMENTS (if not provided, infer from tasks.yaml DOING status)"
+    },
+
+    // STEP 5: Code review with APPROVE/REJECT decision
     "review": {
-      "description": "Review recent code changes against tasks and best practices",
-      "template": "@Code_Reviewer Review the code changes made in this session using the code-review-checklist skill. Verify alignment with current task requirements from tasks.yaml, check code quality and best practices, identify potential issues. Provide clear APPROVE or REJECT decision with actionable feedback.",
-      "agent": "Command_Runner"
+      "description": "Review code changes against task requirements and best practices with APPROVE/REJECT decision",
+      "template": "@Code_Reviewer Review the code changes from this session.\n\n**Context Analysis:**\n1. Read ./tasks.yaml to get current task context (ID, title, description, acceptance criteria)\n2. Use mcp-first skill: analyze staged/unstaged changes via git MCP\n3. Review affected files against paths_hint and dont_touch_paths\n4. Check AGENTS.md for project-specific conventions\n\n**Use code-review-checklist skill:**\n- Apply full checklist (Correctness, Security, Reliability, Maintainability, Performance, Observability, API, Config)\n- Issue clear APPROVE or REJECT decision\n- Provide checklist results, strengths, weaknesses, actionable feedback\n- Focus on Java/SpringBoot/Quarkus best practices\n\n**Review Scope:** $ARGUMENTS (if empty, review all changes in session)"
     },
 
+    // STEP 6: Generate Git/SVN commit commands
     "commit": {
-      "description": "Generate Git/SVN commit commands for current changes",
-      "template": "@Repo_Manager Using the repo-commit-conventions skill, analyze the changes in this session and generate commit commands for both Git and SVN (if applicable). Use conventional commit format based on tasks.yaml context. Provide copy-paste ready shell commands.",
-      "agent": "Command_Runner"
+      "description": "Generate copy-paste ready Git/SVN commit commands with conventional commit messages",
+      "template": "@Repo_Manager Generate commit commands for the current changes.\n\n**Context Gathering:**\n1. Use mcp-first skill: analyze changes via git MCP (diff --staged, diff, branch, history)\n2. Read ./tasks.yaml to get current task (for commit message context)\n3. Detect if SVN is used (check for .svn directory)\n\n**Use repo-commit-conventions skill:**\n- Generate Conventional Commits format: type(scope): description\n- Reference task ID in footer: Refs: T-NNNN\n- Derive message from task title and changes made\n\n**Output (copy-paste ready):**\n1. Git commands: git add <files>, git commit -m \"<message>\" (DO NOT auto-push)\n2. SVN commands (if applicable): svn add <files>, svn commit -m \"<message>\"\n3. Propose 2-3 alternative commit messages for user choice\n\n**Critical:** DO NOT execute git/svn commands automatically. Only provide copy-paste ready commands.\n\n**Scope:** $ARGUMENTS (if empty, commit all changes)"
     }
   },
 
-  //Impostazione aggiornamento automatico
+  // Automatic update notification settings
   "autoupdate": "notify",
 
-  //Impostazione condivisione sessioni
+  // Session sharing configuration
   "share": "disabled",
 
-  //Tema predefinito
+  // Terminal UI theme
   "theme": "ayu",
 
-  //TUI: Impostazioni terminale
+  // Terminal UI settings
   "tui": {
     "scroll_speed": 3,
     "scroll_acceleration": { "enabled": true },
     "diff_style": "auto"
   },
 
-  //Watcher ignore: Directory da ignorare
+  // File watcher: directories to ignore
   "watcher": {
     "ignore": [
       "node_modules/**",
@@ -89,48 +91,117 @@
       ".gitattributes/**",
       ".evo/**",
       ".yo-rc.json",
-      "yo-rc-global.json"
+      "yo-rc-global.json",
+      "target/**",        // Maven build output
+      "build/**",         // Gradle build output
+      ".mvn/**",          // Maven wrapper
+      ".gradle/**",       // Gradle cache
+      ".idea/**",         // IntelliJ IDEA
+      ".vscode/**",       // VSCode
+      "*.class",          // Java compiled classes
+      "*.jar",            // Java archives
+      "*.war"             // Web archives
     ]
   },
 
-  //Compaction: Token compation
+  // Token compaction settings
   "compaction": {
     "auto": true,
     "prune": true
   },
 
-  // Permission baseline (nota: git* / github* qui sono solo policy, il gating reale è in "tools")
+  // Global permission baseline (security-first: deny by default, explicit allow per agent)
   "permission": {
-    "read": "allow",
-    "list": "allow",
-    "glob": "allow",
-    "grep": "allow",
-    "lsp": "allow",
-    "skill": "allow",
-    "todoread": "allow",
-    "todowrite": "allow",
-    "webfetch": "allow",
-    "task": "allow",
-    "edit": "allow",
-    "bash": "allow",
-    "git*": "allow",
-    "github*": "allow",
-    "memory*": "allow",
+    "read": "deny",
+    "list": "deny",
+    "glob": "deny",
+    "grep": "deny",
+    "lsp": "deny",
+    "skill": "deny",
+    "todoread": "deny",
+    "todowrite": "deny",
+    "webfetch": "deny",
+    "task": "deny",
+    "edit": "deny",
+    "write": "deny",
+    "bash": "deny",
+    "git*": "deny",
+    "github*": "deny",
+    "memory*": "deny",
     "external_directory": "ask",
     "doom_loop": "ask"
   },
 
+  // Global tools baseline (security-first: disabled by default, explicit enable per agent)
   "tools": {
-    "git*": true,
-    "github*": true,
-    "memory*": true
+    "read": false,
+    "list": false,
+    "glob": false,
+    "grep": false,
+    "lsp": false,
+    "skill": false,
+    "webfetch": false,
+    "task": false,
+    "edit": false,
+    "write": false,
+    "bash": false,
+    "git*": false,
+    "github*": false,
+    "memory*": false
   },
 
+  // Agent configurations: each agent has specific role, permissions, and tools
   "agent": {
-    "Command_Runner": {
-      "description": "Specialized agent for executing user-provided shell commands, initialization routines. Strictly limited to command execution; does not plan, write code, or perform analysis.",
-      "prompt": "{file:./prompts/command_runner.txt}",
+
+    // === PRIMARY AGENT: OCA (OpenCode Administrator) ===
+    "OCA": {
+      "description": "Primary orchestrator. Routes commands to sub-agents, validates workflow state, delegates code implementation to plan/build agents.",
+      "prompt": "{file:./prompts/oca.md}",
+      "mode": "primary",
       "reasoningEffort": "high",
+      "textVerbosity": "low",
+      "permissions": {
+        "read": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "bash": "deny",
+        "edit": "deny",
+        "write": "deny",
+        "lsp": "allow",
+        "skill": "allow",
+        "webfetch": "allow",
+        "task": "allow",
+        "git*": "allow",
+        "github*": "allow",
+        "memory*": "allow"
+      },
+      "tools": {
+        "read": true,
+        "list": true,
+        "glob": true,
+        "grep": true,
+        "lsp": true,
+        "skill": true,
+        "webfetch": true,
+        "task": true,
+        "bash": false,
+        "edit": false,
+        "write": false,
+        "git*": true,
+        "github*": true,
+        "memory*": true
+      },
+      "max_steps": 5,
+      "temperature": 0.2
+    },
+
+    // === SUB-AGENT 1: Project_Initializer ===
+    "Project_Initializer": {
+      "description": "Project initialization specialist. Creates AGENTS.md, tasks.yaml, .gitignore, runs git init, creates ./plans/ directory. Executes once per project.",
+      "prompt": "{file:./prompts/project_initializer.md}",
+      "mode": "subagent",
+      "reasoningEffort": "medium",
       "textVerbosity": "low",
       "permissions": {
         "read": "allow",
@@ -140,49 +211,69 @@
         "bash": "allow",
         "edit": "deny",
         "write": "allow",
-        "lsp": "deny",
-        "skill": "deny",
+        "lsp": "allow",
+        "skill": "allow",
         "webfetch": "deny",
-        "task": "deny"
+        "task": "deny",
+        "git*": "allow",
+        "github*": "deny",
+        "memory*": "deny"
       },
       "tools": {
-        "bash": true,
+        "read": true,
         "list": true,
         "glob": true,
+        "grep": true,
+        "lsp": true,
+        "bash": true,
         "write": true,
-        "git*": false,
-        "github*": false
+        "skill": true,
+        "edit": false,
+        "webfetch": false,
+        "task": false,
+        "git*": true,
+        "github*": false,
+        "memory*": false
       },
-      "max_steps": 5,
-      "temperature": 0.1
+      "max_steps": 10,
+      "temperature": 0.2
     },
 
+    // === SUB-AGENT 2: Task_Manager ===
     "Task_Manager": {
-      "description": "Manages tasks.yaml file and basic file creation like tasks.yaml: creates new tasks from user input, updates status (TODO/DOING/DONE/BLOCKED/SKIP), adds notes/paths, integrates beads for session-persistent memory. Reads project context and tasks history; no code implementation or planning.",
-      "prompt": "{file:./prompts/task_manager.txt}",
+      "description": "Task manager for ./tasks.yaml. Creates tasks (T-NNNN IDs), updates status, manages Beads integration for persistence. tasks.yaml is source of truth.",
+      "prompt": "{file:./prompts/task_manager.md}",
+      "mode": "subagent",
       "reasoningEffort": "high",
-      "textVerbosity": "medium",
+      "textVerbosity": "low",
       "permissions": {
         "read": "allow",
         "list": "allow",
         "glob": "allow",
         "grep": "allow",
-        "bash": "allow",
+        "bash": "deny",
         "edit": "allow",
         "write": "allow",
         "lsp": "deny",
         "skill": "allow",
         "webfetch": "allow",
-        "task": "allow"
+        "task": "allow",
+        "git*": "deny",
+        "github*": "deny",
+        "memory*": "allow"
       },
       "tools": {
         "read": true,
         "write": true,
         "edit": true,
         "glob": true,
-        "bash": true,
+        "list": true,
+        "grep": true,
+        "bash": false,
         "task": true,
         "skill": true,
+        "webfetch": true,
+        "lsp": false,
         "git*": false,
         "github*": false,
         "memory*": true
@@ -191,17 +282,11 @@
       "temperature": 0.2
     },
 
-    "plan": {
-      "tools": {
-        "git*": true,
-        "github*": true,
-        "memory*": true
-      }
-    },
-
+    // === SUB-AGENT 3: Code_Reviewer ===
     "Code_Reviewer": {
-      "description": "Reviews generated code changes and diffs against tasks.yaml and software engineering best practices. Evaluates code quality, scalability, and maintainability. Approves solid implementations or rejects with actionable feedback for re-planning.",
-      "prompt": "{file:./prompts/code_reviewer.txt}",
+      "description": "Read-only code quality specialist. Reviews code against tasks.yaml requirements and best practices. Issues APPROVE/REJECT decision with actionable feedback.",
+      "prompt": "{file:./prompts/code_reviewer.md}",
+      "mode": "subagent",
       "reasoningEffort": "high",
       "textVerbosity": "high",
       "permissions": {
@@ -209,32 +294,42 @@
         "list": "allow",
         "glob": "allow",
         "grep": "allow",
-        "bash": "allow",
+        "bash": "deny",
         "edit": "deny",
         "write": "deny",
         "lsp": "allow",
         "skill": "allow",
         "webfetch": "allow",
-        "task": "deny"
+        "task": "deny",
+        "git*": "deny",
+        "github*": "deny",
+        "memory*": "deny"
       },
       "tools": {
         "read": true,
         "glob": true,
         "grep": true,
+        "list": true,
         "lsp": true,
-        "bash": true,
+        "bash": false,
         "skill": true,
         "webfetch": true,
+        "edit": false,
+        "write": false,
+        "task": false,
         "git*": false,
-        "github*": false
+        "github*": false,
+        "memory*": false
       },
       "max_steps": 10,
       "temperature": 0.1
     },
 
+    // === SUB-AGENT 4: Repo_Manager ===
     "Repo_Manager": {
-      "description": "Manages Git/SVN repositories: initializes repos, creates .gitignore, generates commit commands. For commits: suggests conventional messages from tasks.yaml, shows status/diffs. For init: executes git init and creates appropriate .gitignore.",
-      "prompt": "{file:./prompts/repo_manager.txt}",
+      "description": "Repository command generator for Git and SVN. Analyzes changes, generates copy-paste ready shell commands with conventional commit messages. NEVER executes commands automatically.",
+      "prompt": "{file:./prompts/repo_manager.md}",
+      "mode": "subagent",
       "reasoningEffort": "high",
       "textVerbosity": "medium",
       "permissions": {
@@ -242,31 +337,42 @@
         "list": "allow",
         "glob": "allow",
         "grep": "allow",
-        "bash": "deny",
+        "bash": "allow",
         "edit": "deny",
         "write": "allow",
         "lsp": "deny",
         "skill": "allow",
         "webfetch": "deny",
-        "task": "deny"
+        "task": "deny",
+        "git*": "allow",
+        "github*": "allow",
+        "memory*": "deny"
       },
       "tools": {
-        "bash": false,
+        "bash": true,
         "glob": true,
         "grep": true,
         "read": true,
         "list": true,
         "write": true,
         "skill": true,
+        "edit": false,
+        "lsp": false,
+        "webfetch": false,
+        "task": false,
         "git*": true,
-        "github*": true
+        "github*": true,
+        "memory*": false
       },
-      "max_steps": 8,
+      "max_steps": 10,
       "temperature": 0.1
     }
   },
 
+  // MCP (Model Context Protocol) servers configuration
   "mcp": {
+    
+    // Local Git MCP server
     "git": {
       "type": "local",
       "command": ["npx", "-y", "@cyanheads/git-mcp-server"],
@@ -279,6 +385,7 @@
       "timeout": 60000
     },
 
+    // Remote GitHub MCP server
     "github": {
       "type": "remote",
       "url": "https://api.githubcopilot.com/mcp",
@@ -291,6 +398,7 @@
       "timeout": 15000
     },
 
+    // Local Memory MCP server (knowledge graph persistence)
     "memory": {
       "type": "local",
       "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],
