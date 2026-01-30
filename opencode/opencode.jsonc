@@ -31,8 +31,8 @@
     
     // STEP 1: Override built-in /init - Project initialization
     "init": {
-      "description": "Initialize project: create AGENTS.md, tasks.yaml, .gitignore, git init, and ./plans/ directory",
-      "template": "@Project_Initializer Initialize this project following the standard workflow:\n\n**Required Actions:**\n1. Scan codebase and create AGENTS.md (~150 lines):\n   - Build/lint/test commands (especially single test execution)\n   - Code style guidelines (imports, formatting, types, naming, error handling)\n   - Include existing rules from .cursor/rules/, .cursorrules, .github/copilot-instructions.md if present\n   - Follow Java/SpringBoot/Quarkus enterprise conventions\n\n2. Create tasks.yaml in project root following tasks-system.md canonical schema\n\n3. Create .gitignore appropriate for detected stack (Java/Maven/Gradle/SpringBoot/Quarkus)\n\n4. Run 'git init' to initialize repository (required for Beads persistence)\n\n5. Create ./plans/ directory for plan storage\n\n**Context:**\n- Project path: $CWD\n- Stack hint: $ARGUMENTS\n\n**Use mcp-first skill:** Prefer Git MCP for initialization, fallback to bash only if needed."
+      "description": "Initialize project: create AGENTS.md, tasks.yaml, .gitignore, run git init, run /bd-init (.beads/), and create ./plans/ directory",
+      "template": "@Project_Initializer Initialize this project following the standard workflow:\n\n**Required Actions:**\n1. Scan codebase and create AGENTS.md (~150 lines):\n   - Build/lint/test commands (especially single test execution)\n   - Code style guidelines (imports, formatting, types, naming, error handling)\n   - Include existing rules from .cursor/rules/, .cursorrules, .github/copilot-instructions.md if present\n   - Follow Java/SpringBoot/Quarkus enterprise conventions\n\n2. Create tasks.yaml in project root following tasks-system.md canonical schema\n\n3. Create .gitignore appropriate for detected stack (Java/Maven/Gradle/SpringBoot/Quarkus)\n\n4. Run 'git init' to initialize repository (required for Beads persistence)\n\n5. Initialize Beads using OpenCode command: /bd-init (creates .beads/)\n\n6. Ensure .beads/ is included in .gitignore\n\n7. Create ./plans/ directory for plan storage\n\n**Context:**\n- Project path: $CWD\n- Stack hint: $ARGUMENTS\n\n**Use mcp-first skill:** Prefer Git MCP for initialization, fallback to bash only if needed." 
     },
 
     // STEP 2: Create new task in tasks.yaml
@@ -43,26 +43,25 @@
 
     // STEP 3: Override built-in /plan - Create implementation plan
     "plan": {
-      "description": "Create detailed implementation plan for active task (saves to ./plans/plan-<task-id>.md)",
-      "template": "@plan Create a comprehensive implementation plan for the current task.\n\n**Context Gathering:**\n1. Read ./tasks.yaml to identify active task (status: DOING)\n   - If no DOING task, ask user which TODO task to plan\n   - Extract: task ID, title, description, priority, paths_hint, dont_touch_paths, notes\n2. Use mcp-first skill: analyze codebase, review AGENTS.md conventions\n\n**Plan Requirements:**\n- Break down into atomic, testable implementation steps\n- Create step-by-step checklist for @build agent to follow sequentially\n- Identify all files to create/modify/delete\n- Note potential risks, edge cases, and dependencies\n- Respect dont_touch_paths safety boundaries\n- Include acceptance criteria from task notes\n\n**Output:**\n- Save to ./plans/plan-<task-id>.md\n- Use markdown with sections: Task Context, Analysis, Implementation Checklist, Files Affected, Risks & Mitigations, Acceptance Criteria\n\n**Task ID:** $ARGUMENTS (if not provided, infer from tasks.yaml DOING status)\n\n**Use task-workflow skill for task handling guidance.**"
+      "description": "Create detailed implementation plan for the next TODO+delegable task (saves to ./plans/plan-<task-id>.md)",
+      "template": "@plan Create a comprehensive implementation plan for the next available AI task.\n\n**Task Selection (automatic):**\n1. Read ./tasks.yaml\n2. Identify candidate tasks where:\n   - status: TODO\n   - delegable: true\n3. If $ARGUMENTS contains a task ID (T-NNNN), plan that task ONLY if it matches status TODO and delegable true; otherwise stop and explain why\n4. If exactly ONE candidate exists, plan it automatically\n5. If zero candidates exist, stop and report: no TODO+delegable tasks available\n6. If more than one candidate exists, ask the user to choose which task ID to plan\n\n**Context Gathering:**\n- Extract from the selected task: task ID, title, description, priority, paths_hint, dont_touch_paths, notes\n- Use mcp-first skill: analyze codebase and review AGENTS.md conventions\n\n**Plan Requirements:**\n- Break down into atomic, testable implementation steps\n- Create step-by-step checklist for @build agent to follow sequentially\n- Identify all files to create/modify/delete\n- Note potential risks, edge cases, and dependencies\n- Respect dont_touch_paths safety boundaries\n- Include acceptance criteria from task notes\n\n**Output:**\n- Save to ./plans/plan-<task-id>.md\n- Use markdown sections: Task Context, Analysis, Implementation Checklist, Files Affected, Risks & Mitigations, Acceptance Criteria\n\n**Use task-workflow skill for task handling guidance.**"   
     },
-
     // STEP 4: Override built-in /build - Implement plan
     "build": {
       "description": "Implement plan from ./plans/plan-<task-id>.md with step-by-step execution and diff output",
-      "template": "@build Implement the plan for the current task following the checklist.\n\n**Context Loading:**\n1. Read ./tasks.yaml to identify task ID (status: DOING)\n2. Load plan from ./plans/plan-<task-id>.md\n3. Use mcp-first skill: get context from git MCP, memory MCP\n4. Review AGENTS.md for code conventions\n\n**Implementation Protocol:**\n- Execute each checklist item sequentially (do NOT skip or reorder)\n- Generate clean, production-ready code following AGENTS.md style\n- Respect dont_touch_paths boundaries (ask for approval if needed)\n- **Output diffs for user review** (DO NOT apply changes automatically)\n- Update task notes in tasks.yaml with implementation progress\n\n**Restrictions (critical):**\n- NO test execution (unit tests, integration tests)\n- NO build/compile operations (Maven, Gradle)\n- NO deploy or lifecycle management\n- Generate code only; user handles validation\n\n**Task ID:** $ARGUMENTS (if not provided, infer from tasks.yaml DOING status)"
+      "template": "@build Implement the plan created by /plan.\n\n**Plan Selection (primary):**\n1. Use $ARGUMENTS as task ID (T-NNNN) and load plan from ./plans/plan-<task-id>.md\n\n**Plan Selection (fallbacks):**\n2. If $ARGUMENTS is empty, locate plan files ./plans/plan-*.md\n   - If exactly one plan exists, use it\n   - If more than one plan exists, ask the user which plan file to implement\n   - If none exist, stop and instruct user to run /plan first\n\n**Plan Loading:**\n- Read the selected plan file and follow its checklist sequentially (do NOT skip or reorder)\n- Treat the plan as authoritative for scope, constraints, and dont_touch_paths\n\n**Implementation Protocol:**\n- Generate clean, production-ready code following AGENTS.md conventions\n- Respect dont_touch_paths boundaries from the plan (stop and ask for approval if a restricted change is required)\n- After changes, provide a clear diff-style summary and list files modified/created\n\n**Restrictions (critical):**\n- NO test execution (unit tests, integration tests)\n- NO build/compile operations (Maven, Gradle)\n- NO deploy or lifecycle management\n- Implement code changes only; user handles validation"   
     },
 
     // STEP 5: Code review with APPROVE/REJECT decision
     "review": {
-      "description": "Review code changes against task requirements and best practices with APPROVE/REJECT decision",
-      "template": "@Code_Reviewer Review the code changes from this session.\n\n**Context Analysis:**\n1. Read ./tasks.yaml to get current task context (ID, title, description, acceptance criteria)\n2. Use mcp-first skill: analyze staged/unstaged changes via git MCP\n3. Review affected files against paths_hint and dont_touch_paths\n4. Check AGENTS.md for project-specific conventions\n\n**Use code-review-checklist skill:**\n- Apply full checklist (Correctness, Security, Reliability, Maintainability, Performance, Observability, API, Config)\n- Issue clear APPROVE or REJECT decision\n- Provide checklist results, strengths, weaknesses, actionable feedback\n- Focus on Java/SpringBoot/Quarkus best practices\n\n**Review Scope:** $ARGUMENTS (if empty, review all changes in session)"
+      "description": "Manual code review of current session changes (unstaged-first, staged fallback) with APPROVE/REJECT; separates AI blockers vs user warnings",
+      "template": "@Code_Reviewer Review the code changes from this session.\n\n**Context Analysis:**\n1. Use mcp-first skill: analyze unstaged changes via git MCP (if none, fallback to staged changes)\n2. Check AGENTS.md for project-specific conventions\n3. OPTIONAL: If ./tasks.yaml exists and there is an active DOING task, use it as additional context (acceptance criteria, paths_hint, dont_touch_paths)\n4. Distinguish AI-generated vs user-written changes and apply the reject fallback strategy accordingly\n\n**Use code-review-checklist skill:**\n- Apply full checklist (Correctness, Security, Reliability, Maintainability, Performance, Observability, API, Config)\n- Issue clear APPROVE or REJECT decision\n- Provide checklist results, strengths, weaknesses, actionable feedback\n- Separate AI-Generated Code Issues (blockers) from User-Written Code Issues (warnings)\n- Focus on Java/SpringBoot/Quarkus best practices\n\n**Review Scope:** $ARGUMENTS (if empty, review all changes in session)"
     },
 
     // STEP 6: Generate Git/SVN commit commands
     "commit": {
-      "description": "Generate copy-paste ready Git/SVN commit commands with conventional commit messages",
-      "template": "@Repo_Manager Generate commit commands for the current changes.\n\n**Context Gathering:**\n1. Use mcp-first skill: analyze changes via git MCP (diff --staged, diff, branch, history)\n2. Read ./tasks.yaml to get current task (for commit message context)\n3. Detect if SVN is used (check for .svn directory)\n\n**Use repo-commit-conventions skill:**\n- Generate Conventional Commits format: type(scope): description\n- Reference task ID in footer: Refs: T-NNNN\n- Derive message from task title and changes made\n\n**Output (copy-paste ready):**\n1. Git commands: git add <files>, git commit -m \"<message>\" (DO NOT auto-push)\n2. SVN commands (if applicable): svn add <files>, svn commit -m \"<message>\"\n3. Propose 2-3 alternative commit messages for user choice\n\n**Critical:** DO NOT execute git/svn commands automatically. Only provide copy-paste ready commands.\n\n**Scope:** $ARGUMENTS (if empty, commit all changes)"
+      "description": "Generate copy-paste Git+SVN staging/commit/push commands and 2-3 Conventional Commit messages (task ref optional, never execute commands)",
+      "template": "@Repo_Manager Generate commit commands for the current changes.\n\n**Context Gathering:**\n1. Use mcp-first skill: analyze changes via git MCP (prefer unstaged diff; if none, use staged diff), also get branch and recent history\n2. OPTIONAL: Read ./tasks.yaml only to add footer \"Refs: T-NNNN\" when there is an active DOING task (otherwise omit task references)\n3. ALWAYS generate BOTH Git and SVN command blocks, unless the user explicitly says \"no SVN\" or \"no Git\"\n\n**Use repo-commit-conventions skill:**\n- Generate Conventional Commits format: type(scope): description\n- Propose 2-3 alternative commit messages for user choice\n- Derive message from actual diff (must cover both AI and human changes)\n\n**Staging selection (interactive):**\n- Ask user to choose:\n  1) Stage ALL changes\n  2) Select FILES to stage (user will paste file paths)\n\n**Output (copy-paste ready):**\n1. Git commands: git status, git diff, git add (based on user choice), git commit -m \"<message>\", git push\n2. SVN commands: svn status, svn add (if needed), svn commit -m \"<message>\"\n\n**Critical:** DO NOT execute git/svn commands automatically. Only provide copy-paste ready commands.\n\n**Scope:** $ARGUMENTS"
     }
   },
 
@@ -156,7 +155,7 @@
     // === PRIMARY AGENT: OCA (OpenCode Administrator) ===
     "OCA": {
       "description": "Primary orchestrator. Routes commands to sub-agents, validates workflow state, delegates code implementation to plan/build agents.",
-      "prompt": "{file:./prompts/oca.md}",
+      "prompt": "{file:./prompts/oca.txt}",
       "mode": "primary",
       "reasoningEffort": "high",
       "textVerbosity": "low",
@@ -199,7 +198,7 @@
     // === SUB-AGENT 1: Project_Initializer ===
     "Project_Initializer": {
       "description": "Project initialization specialist. Creates AGENTS.md, tasks.yaml, .gitignore, runs git init, creates ./plans/ directory. Executes once per project.",
-      "prompt": "{file:./prompts/project_initializer.md}",
+      "prompt": "{file:./prompts/project_initializer.txt}",
       "mode": "subagent",
       "reasoningEffort": "medium",
       "textVerbosity": "low",
@@ -242,7 +241,7 @@
     // === SUB-AGENT 2: Task_Manager ===
     "Task_Manager": {
       "description": "Task manager for ./tasks.yaml. Creates tasks (T-NNNN IDs), updates status, manages Beads integration for persistence. tasks.yaml is source of truth.",
-      "prompt": "{file:./prompts/task_manager.md}",
+      "prompt": "{file:./prompts/task_manager.txt}",
       "mode": "subagent",
       "reasoningEffort": "high",
       "textVerbosity": "low",
@@ -285,7 +284,7 @@
     // === SUB-AGENT 3: Code_Reviewer ===
     "Code_Reviewer": {
       "description": "Read-only code quality specialist. Reviews code against tasks.yaml requirements and best practices. Issues APPROVE/REJECT decision with actionable feedback.",
-      "prompt": "{file:./prompts/code_reviewer.md}",
+      "prompt": "{file:./prompts/code_reviewer.txt}",
       "mode": "subagent",
       "reasoningEffort": "high",
       "textVerbosity": "high",
@@ -328,7 +327,7 @@
     // === SUB-AGENT 4: Repo_Manager ===
     "Repo_Manager": {
       "description": "Repository command generator for Git and SVN. Analyzes changes, generates copy-paste ready shell commands with conventional commit messages. NEVER executes commands automatically.",
-      "prompt": "{file:./prompts/repo_manager.md}",
+      "prompt": "{file:./prompts/repo_manager.txt}",
       "mode": "subagent",
       "reasoningEffort": "high",
       "textVerbosity": "medium",
