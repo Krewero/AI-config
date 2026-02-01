@@ -48,13 +48,13 @@ Creates/ensures:
 - `tasks.yaml` (canonical schema)
 - `.gitignore`
 - git repo initialized (required prerequisite for Beads init)
-- Initialize Beads via `/bd-init` (creates `.beads/` directory for persistence)
+- Initialize Beads via OpenCode command `beads:init` (creates `.beads/` directory for persistence). Fallback to bash `bd init` if the command is unavailable.
 - Ensure `.beads/` is ignored in `.gitignore`
 - `./plans/` directory
 
 Notes:
 - `/bd-init` must run AFTER `git init` completes.
-- Beads initialization is part of `/init` to enable recovery from the beginning.
+- Beads initialization is part of `/init` to enable recovery from the beginning. Use `beads:init` command first, fallback to `bd init` via bash if needed.
 
 
 ### Step 2: Create task
@@ -117,7 +117,7 @@ Rules:
 - Source of truth remains `tasks.yaml`.
 - Mirror only `DOING` / `BLOCKED`.
 - Close Beads issue when task becomes `DONE` or `SKIP` and keep metadata for history.
-- Beads operations are done via the Beads subagent (not by running `bd` via bash).
+- Beads operations are done via the OpenCode command `beads:init` for initialization. Use `bd` CLI via bash only as explicit fallback when the OpenCode command is unavailable.
 
 ---
 

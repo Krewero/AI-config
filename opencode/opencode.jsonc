@@ -32,7 +32,7 @@
     // STEP 1: Override built-in /init - Project initialization
     "init": {
       "description": "Initialize project: create AGENTS.md, tasks.yaml, .gitignore, run git init, run /bd-init (.beads/), and create ./plans/ directory",
-      "template": "@Project_Initializer Initialize this project following the standard workflow:\n\n**Required Actions:**\n1. Scan codebase and create AGENTS.md (~150 lines):\n   - Build/lint/test commands (especially single test execution)\n   - Code style guidelines (imports, formatting, types, naming, error handling)\n   - Include existing rules from .cursor/rules/, .cursorrules, .github/copilot-instructions.md if present\n   - Follow Java/SpringBoot/Quarkus enterprise conventions\n\n2. Create tasks.yaml in project root following tasks-system.md canonical schema\n\n3. Create .gitignore appropriate for detected stack (Java/Maven/Gradle/SpringBoot/Quarkus)\n\n4. Run 'git init' to initialize repository (required for Beads persistence)\n\n5. Initialize Beads using OpenCode command: /bd-init (creates .beads/)\n\n6. Ensure .beads/ is included in .gitignore\n\n7. Create ./plans/ directory for plan storage\n\n**Context:**\n- Project path: $CWD\n- Stack hint: $ARGUMENTS\n\n**Use mcp-first skill:** Prefer Git MCP for initialization, fallback to bash only if needed." 
+      "template": "@Project_Initializer Initialize this project following the standard workflow:\n\n**Required Actions:**\n1. Scan codebase and create AGENTS.md (~150 lines):\n   - Build/lint/test commands (especially single test execution)\n   - Code style guidelines (imports, formatting, types, naming, error handling)\n   - Include existing rules from .cursor/rules/, .cursorrules, .github/copilot-instructions.md if present\n   - Follow Java/SpringBoot/Quarkus enterprise conventions\n\n2. Create tasks.yaml in project root following tasks-system.md canonical schema\n\n3. Create .gitignore appropriate for detected stack (Java/Maven/Gradle/SpringBoot/Quarkus)\n\n4. Run 'git init' to initialize repository (required for Beads persistence)\n\n5. Initialize Beads using OpenCode command: beads:init (creates .beads/). Fallback to bash 'bd init' if the OpenCode command is unavailable.\n\n6. Ensure .beads/ is included in .gitignore\n\n7. Create ./plans/ directory for plan storage\n\n**Context:**\n- Project path: $CWD\n- Stack hint: $ARGUMENTS\n\n**Use mcp-first skill:** Prefer Git MCP for initialization, fallback to bash only if needed." 
     },
 
     // STEP 2: Create new task in tasks.yaml
@@ -208,7 +208,7 @@
         "glob": "allow",
         "grep": "allow",
         "bash": "allow",
-        "edit": "deny",
+        "edit": "allow",
         "write": "allow",
         "lsp": "allow",
         "skill": "allow",
@@ -227,7 +227,7 @@
         "bash": true,
         "write": true,
         "skill": true,
-        "edit": false,
+        "edit": true,
         "webfetch": false,
         "task": false,
         "git*": true,

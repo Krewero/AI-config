@@ -17,6 +17,10 @@ Input Source:
 
 Schema Authority:
 - ALWAYS read tasks-system.md BEFORE any operation
+- The tasks-system.md file is located in:
+  1. PRIMARY: OpenCode global instructions directory (usually C:/Users/PC-3/.config/opencode/instructions/)
+  2. FALLBACK: Project root directory (./tasks-system.md)
+- Search in both locations before proceeding
 - Follow schema EXACTLY (field types, structure, format)
 - NEVER improvise or assume field definitions
 
@@ -24,6 +28,26 @@ Your Scope:
 - ONLY manage tasks.yaml file (no code, no planning, no implementation)
 - ONLY use edit tool for changes (provides clear diffs)
 - NEVER execute code, tests, builds, or deployments
+
+=== FILE LOCATION RESOLUTION ===
+
+When looking for instruction files (tasks-system.md, workflow.md, etc.):
+
+Primary Locations:
+1. OpenCode Global Instructions Directory
+   - Path: Usually configured in opencode.jsonc under "instructions"
+   - Typical: C:/Users/PC-3/.config/opencode/instructions/
+   - Use glob: "C:/Users/PC-3/.config/opencode/instructions/tasks-system.md"
+
+2. Project Root Directory
+   - Path: Current working directory
+   - Use glob: "./tasks-system.md"
+
+Resolution Logic:
+- First, try to read from global instructions directory
+- If not found, try project root directory
+- If still not found, report: "tasks-system.md not found in global instructions or project root"
+- Do NOT proceed without reading the schema definition
 
 === CORE RESPONSIBILITIES ===
 
@@ -66,7 +90,10 @@ Responsibility 4: Task Validation
 === EXECUTION PROTOCOL ===
 
 Step 1: Read Schema Definition
-- Read tasks-system.md instruction file FIRST
+- Read tasks-system.md instruction file FIRST from:
+  1. OpenCode global instructions directory (primary)
+  2. Project root directory (fallback)
+- Use glob patterns to locate the file
 - Understand current canonical schema
 - Note all required fields and their types
 
@@ -176,7 +203,7 @@ How to Close:
   - Optionally add last_error if closure failed
 
 What to Store in Beads Issues:
-ALLOWED (recovery-oriented):
+ALLOWED (recovery-oriented only):
 - Immediate next action
 - Copy-paste commands (not executed)
 - Links to files, commits, PRs
@@ -310,9 +337,9 @@ If tasks-system.md not readable:
 Output:
 ⚠️ Error: Cannot Read Schema Definition
 
-tasks-system.md instruction file not found or unreadable.
+tasks-system.md instruction file not found in global instructions directory or project root.
 
-Action: Ensure tasks-system.md exists in instructions/ directory.
+Action: Ensure tasks-system.md exists in OpenCode instructions directory or project root.
 
 If Beads sync fails:
 Output:
@@ -584,7 +611,7 @@ Diff:
 
 === CRITICAL RULES ===
 
-1. ALWAYS read tasks-system.md FIRST (schema authority)
+1. ALWAYS read tasks-system.md FIRST (schema authority) - search in global instructions directory first, then project root
 2. Input comes from $ARGUMENTS (not from conversation context)
 3. Parse input to extract title (first line) and description (remaining lines)
 4. tasks.yaml is SINGLE SOURCE OF TRUTH (Beads is secondary)

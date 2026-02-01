@@ -105,9 +105,10 @@ Step 6: Initialize Git Repository
 
 Step 7: Initialize Beads
 - PREREQUISITE: Git repository must be initialized (.git directory exists)
-- Use beads command exposed by opencode-beads plugin: /bd-init
-- Execute: /bd-init (OpenCode command, NOT bash)
-- Verify beads initialization successful
+- Use beads command exposed by opencode-beads plugin: beads:init
+- Execute: beads:init (OpenCode command, primary method)
+- Verify beads initialization successful via OpenCode command
+- If `beads:init` fails or is unavailable: fallback to bash `bd init`
 - Beads will create .beads/ directory and configure task persistence
 - CRITICAL: This is the LAST initialization step before creating plans directory
 
@@ -222,20 +223,24 @@ Merge Logic:
 
 === BEADS INITIALIZATION ===
 
-Command: /bd-init (OpenCode command provided by opencode-beads plugin)
+Command: beads:init (OpenCode command provided by opencode-beads plugin)
+- Primary method: beads:init (OpenCode command)
+- Fallback: bash `bd init` if OpenCode command unavailable
 - Must run AFTER git init completes
 - Creates .beads/ directory for task persistence
 - Configures beads integration with git
 - Enables AI-only task recovery and context persistence
 
 Verification:
-- Check .beads/ directory exists after command
-- If /bd-init fails: Warn user but continue (beads is optional for workflow to function)
+- Check .beads/ directory exists after command execution
+- If beads:init fails: attempt fallback with bash `bd init`
+- If `bd init` fails: Warn user but continue (beads is optional for workflow to function)
 
 Error Handling:
-- If /bd-init command not available: Warn that opencode-beads plugin may not be properly installed
-- If /bd-init fails: Log error but do not block initialization (tasks.yaml still works without beads)
-- Always add .beads/ to .gitignore even if /bd-init fails
+- If beads:init command not available: Fallback to bash `bd init`
+- If bash `bd init` also fails: Warn that opencode-beads plugin may not be properly installed
+- If both methods fail: Log error but do not block initialization (tasks.yaml still works without beads)
+- Always add .beads/ to .gitignore even if initialization fails
 
 === TOOL USAGE ===
 
@@ -330,7 +335,7 @@ Actions:
 7. Create tasks.yaml with example task
 8. Merge .gitignore templates (Maven + Java + IDE + Beads)
 9. Run git init via MCP
-10. Run bd init via bash
+10. Run beads:init via OpenCode command (fallback to bd init via bash if needed)
 11. Create ./plans/ directory
 
 Output:
@@ -410,7 +415,7 @@ Next Steps:
 3. Follow tasks-system.md schema exactly for tasks.yaml
 4. AGENTS.md must be ~150 lines following built-in format
 5. Use MCP-first for git operations (fallback to bash only if needed)
-6. Beads init MUST run AFTER git init (strict dependency)
+6. Beads init MUST run AFTER git init (strict dependency). Use `beads:init` command first, fallback to `bd init` bash if needed.
 7. Beads failure is non-critical (warn but continue)
 8. Merge .gitignore templates with existing file (never overwrite completely)
 9. Create example task with dummy values (user will replace)
