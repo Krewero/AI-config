@@ -43,9 +43,10 @@
 
     // STEP 3: Override built-in /plan - Create implementation plan
     "plan": {
-      "description": "Create detailed implementation plan for the next TODO+delegable task (saves to ./plans/plan-<task-id>.md)",
-      "template": "@plan Create a comprehensive implementation plan for the next available AI task.\n\n**Task Selection (automatic):**\n1. Read ./tasks.yaml\n2. Identify candidate tasks where:\n   - status: TODO\n   - delegable: true\n3. If $ARGUMENTS contains a task ID (T-NNNN), plan that task ONLY if it matches status TODO and delegable true; otherwise stop and explain why\n4. If exactly ONE candidate exists, plan it automatically\n5. If zero candidates exist, stop and report: no TODO+delegable tasks available\n6. If more than one candidate exists, ask the user to choose which task ID to plan\n\n**Context Gathering:**\n- Extract from the selected task: task ID, title, description, priority, paths_hint, dont_touch_paths, notes\n- Use mcp-first skill: analyze codebase and review AGENTS.md conventions\n\n**Plan Requirements:**\n- Break down into atomic, testable implementation steps\n- Create step-by-step checklist for @build agent to follow sequentially\n- Identify all files to create/modify/delete\n- Note potential risks, edge cases, and dependencies\n- Respect dont_touch_paths safety boundaries\n- Include acceptance criteria from task notes\n\n**Output:**\n- Save to ./plans/plan-<task-id>.md\n- Use markdown sections: Task Context, Analysis, Implementation Checklist, Files Affected, Risks & Mitigations, Acceptance Criteria\n\n**Use task-workflow skill for task handling guidance.**"   
+      "description": "Create implementation plan for highest priority TODO task or specified task",
+      "template": "@plan Create implementation plan following your prompt instructions from global config /prompt folder.\n\n**Input:** $ARGUMENTS\n\n**Follow plan.txt prompt EXACTLY for task selection and plan creation.**"
     },
+
     // STEP 4: Override built-in /build - Implement plan
     "build": {
       "description": "Implement plan from ./plans/plan-<task-id>.md with step-by-step execution and diff output",
@@ -279,6 +280,32 @@
       },
       "max_steps": 10,
       "temperature": 0.2
+    },
+
+    "plan": {
+      "description": "Implementation planning specialist. Creates ./plans/plan-<task-id>.md",
+      "prompt": "{file:./prompts/plan.txt}",
+      "mode": "subagent",
+      "permissions": {
+        "read": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "edit": "allow",
+        "write": "allow",
+        "bash": "deny",
+        "lsp": "allow",
+        "skill": "allow"
+      },
+      "tools": {
+        "read": true,
+        "glob": true,
+        "grep": true,
+        "edit": true,
+        "write": true,
+        "lsp": true,
+        "skill": true
+      }
     },
 
     // === SUB-AGENT 3: Code_Reviewer ===
