@@ -2,14 +2,19 @@
   // Official schema for validation and editor autocomplete
   "$schema": "https://opencode.ai/config.json",
 
+  // ============================================================================
+  // PLUGINS
+  // ============================================================================
   // OpenCode plugins to load
   "plugin": [
-    "opencode-antigravity-auth@latest",
-    "opencode-beads@latest",
-    "@tarquinen/opencode-dcp@latest"
+    "opencode-antigravity-auth@latest",   // Authentication management
+    "opencode-beads@latest",               // AI-only task persistence, exposes @beads-task-agent subagent
+    "@tarquinen/opencode-dcp@latest"       // DCP integration
   ],
 
-  // Local OpenCode server configuration
+  // ============================================================================
+  // SERVER CONFIGURATION
+  // ============================================================================
   "server": {
     "port": 4096,
     "hostname": "localhost",
@@ -26,56 +31,69 @@
     "C:/Users/PC-3/.config/opencode/instructions/*.md"
   ],
 
-  // Custom commands: workflow-driven command system
+  // ============================================================================
+  // CUSTOM COMMANDS (Workflow-driven)
+  // ============================================================================
+  // IMPORTANT: Commands that require orchestration (two-step delegation) must
+  // route through OCA. Commands with single-agent responsibility can call
+  // the agent directly.
+  //
+  // Routing strategy:
+  //   /init      → @Project_Initializer (single agent)
+  //   /add-task  → @Task_Manager (single agent)
+  //   /plan      → @OCA (two-step: Task_Manager → plan)
+  //   /build     → @OCA (validation + single agent)
+  //   /review    → @OCA (two-step: Code_Reviewer → Task_Manager)
+  //   /commit    → @Repo_Manager (single agent)
+  // ============================================================================
   "command": {
     
-    // STEP 1: Override built-in /init - Project initialization
+    // STEP 1: Project initialization (single agent, no orchestration needed)
     "init": {
-      "description": "Initialize project: create AGENTS.md, tasks.yaml, .gitignore, run git init, run /bd-init (.beads/), and create ./plans/ directory",
-      "template": "@Project_Initializer Initialize this project following the standard workflow:\n\n**Required Actions:**\n1. Scan codebase and create AGENTS.md (~150 lines):\n   - Build/lint/test commands (especially single test execution)\n   - Code style guidelines (imports, formatting, types, naming, error handling)\n   - Include existing rules from .cursor/rules/, .cursorrules, .github/copilot-instructions.md if present\n   - Follow Java/SpringBoot/Quarkus enterprise conventions\n\n2. Create tasks.yaml in project root following tasks-system.md canonical schema\n\n3. Create .gitignore appropriate for detected stack (Java/Maven/Gradle/SpringBoot/Quarkus)\n\n4. Run 'git init' to initialize repository (required for Beads persistence)\n\n5. Initialize Beads using OpenCode command: beads:init (creates .beads/). Fallback to bash 'bd init' if the OpenCode command is unavailable.\n\n6. Ensure .beads/ is included in .gitignore\n\n7. Create ./plans/ directory for plan storage\n\n**Context:**\n- Project path: $CWD\n- Stack hint: $ARGUMENTS\n\n**Use mcp-first skill:** Prefer Git MCP for initialization, fallback to bash only if needed." 
+      "description": "Initialize project: create AGENTS.md, tasks.yaml, .gitignore, run git init, run beads:init (.beads/), and create ./plans/ directory",
+      "template": "@Project_Initializer Initialize this project following the standard workflow:\n\n**Required Actions:**\n1. Scan codebase and create AGENTS.md (~150 lines):\n   - Build/lint/test commands (especially single test execution)\n   - Code style guidelines (imports, formatting, types, naming, error handling)\n   - Include existing rules from .cursor/rules/, .cursorrules, .github/copilot-instructions.md if present\n   - Follow Java/SpringBoot/Quarkus enterprise conventions\n\n2. Create tasks.yaml in project root following tasks-system.md canonical schema\n\n3. Create .gitignore appropriate for detected stack (Java/Maven/Gradle/SpringBoot/Quarkus)\n\n4. Run 'git init' to initialize repository (required for Beads persistence)\n\n5. Initialize Beads using OpenCode command: beads:init (creates .beads/). Fallback to bash 'bd init' if the OpenCode command is unavailable.\n\n6. Ensure .beads/ is included in .gitignore\n\n7. Create ./plans/ directory for plan storage\n\n**Context:**\n- Project path: $CWD\n- Stack hint: $ARGUMENTS\n\n**Use mcp-first skill:** Prefer Git MCP for initialization, fallback to bash only if needed."
     },
 
-    // STEP 2: Create new task in tasks.yaml
+    // STEP 2: Create new task (single agent, no orchestration needed)
     "add-task": {
       "description": "Add a new task to tasks.yaml following the canonical schema",
       "template": "@Task_Manager Create a new task in ./tasks.yaml based on this input:\n\n$ARGUMENTS\n\n**Task Creation:**\n- Parse input to extract title and description\n- Generate next T-NNNN ID (parse existing, find max, increment, zero-pad to 4 digits)\n- Set status: TODO, delegable: true, priority: 3 (medium)\n- Initialize beads metadata with all fields null (mirrored: false)\n- Follow tasks-system.md canonical YAML structure exactly\n\n**Use task-workflow and beads-workflow skills for guidance.**"
     },
 
-    // STEP 3: Override built-in /plan - Create implementation plan
+    // STEP 3: Plan creation (TWO-STEP ORCHESTRATION via OCA)
+    // Flow: OCA validates → Task_Manager (TODO→DOING + Beads) → plan (creates plan file)
     "plan": {
-      "description": "Create implementation plan for highest priority TODO task or specified task",
-      "template": "@plan Create implementation plan following your prompt instructions from global config /prompt folder.\n\n**Input:** $ARGUMENTS\n\n**Follow plan.txt prompt EXACTLY for task selection and plan creation.**"
+      "description": "Create implementation plan (two-step: Task_Manager updates status, then plan creates plan file)",
+      "template": "@OCA Orchestrate /plan command with two-step delegation.\n\n**Input:** $ARGUMENTS\n\n**Required Orchestration (follow EXACTLY):**\n\n**Step 1: Validate Prerequisites**\n- Check ./tasks.yaml exists\n- Check ./AGENTS.md exists\n- If missing: STOP with error message\n\n**Step 2: Delegate to @Task_Manager**\nPass this exact instruction:\n\"Pre-planning workflow for /plan command.\nInput: $ARGUMENTS\nActions required:\n1. Parse input to extract task ID (T-NNNN) or detect auto-select mode (empty)\n2. If specific task: validate exists, status=TODO, delegable=true\n3. If auto-select: find highest priority TODO+delegable task\n4. Update task status: TODO → DOING\n5. Mirror to Beads (create issue via @beads-task-agent)\n6. Output confirmation and TERMINATE\"\n\n**Step 3: After Task_Manager completes, delegate to @plan**\nPass this exact instruction:\n\"Create implementation plan for the task now in DOING status.\nActions required:\n1. Read tasks.yaml, find task with status=DOING\n2. If no DOING task found: ERROR (Task_Manager should have set one)\n3. Analyze codebase and create detailed implementation plan\n4. Save plan to ./plans/plan-<task-id>.md\n5. Output confirmation with plan summary\"\n\n**Critical:** Complete BOTH steps before returning to user."
     },
 
-    // STEP 4: Override built-in /build - Implement plan
+    // STEP 4: Build implementation (validation via OCA, then built-in build agent)
     "build": {
-      "description": "Implement plan from ./plans/plan-<task-id>.md with step-by-step execution and diff output",
-      "template": "@build Implement the plan created by /plan.\n\n**Plan Selection (primary):**\n1. Use $ARGUMENTS as task ID (T-NNNN) and load plan from ./plans/plan-<task-id>.md\n\n**Plan Selection (fallbacks):**\n2. If $ARGUMENTS is empty, locate plan files ./plans/plan-*.md\n   - If exactly one plan exists, use it\n   - If more than one plan exists, ask the user which plan file to implement\n   - If none exist, stop and instruct user to run /plan first\n\n**Plan Loading:**\n- Read the selected plan file and follow its checklist sequentially (do NOT skip or reorder)\n- Treat the plan as authoritative for scope, constraints, and dont_touch_paths\n\n**Implementation Protocol:**\n- Generate clean, production-ready code following AGENTS.md conventions\n- Respect dont_touch_paths boundaries from the plan (stop and ask for approval if a restricted change is required)\n- After changes, provide a clear diff-style summary and list files modified/created\n\n**Restrictions (critical):**\n- NO test execution (unit tests, integration tests)\n- NO build/compile operations (Maven, Gradle)\n- NO deploy or lifecycle management\n- Implement code changes only; user handles validation"   
+      "description": "Implement plan from ./plans/plan-<task-id>.md with step-by-step execution",
+      "template": "@OCA Orchestrate /build command.\n\n**Input:** $ARGUMENTS\n\n**Step 1: Validate Prerequisites**\n- Check ./tasks.yaml exists\n- Check ./AGENTS.md exists\n- If $ARGUMENTS contains task ID: verify task exists with status=DOING\n- Verify plan file exists: ./plans/plan-<task-id>.md\n- If any validation fails: STOP with error message\n\n**Step 2: Delegate to @build**\nPass this instruction:\n\"Implement the plan created by /plan.\n\n**Plan Selection (primary):**\n1. Use $ARGUMENTS as task ID (T-NNNN) and load plan from ./plans/plan-<task-id>.md\n\n**Plan Selection (fallbacks):**\n2. If $ARGUMENTS is empty, locate plan files ./plans/plan-*.md\n   - If exactly one plan exists, use it\n   - If more than one plan exists, ask the user which plan file to implement\n   - If none exist, stop and instruct user to run /plan first\n\n**Implementation Protocol:**\n- Read the selected plan file and follow its checklist sequentially (do NOT skip or reorder)\n- Treat the plan as authoritative for scope, constraints, and dont_touch_paths\n- Generate clean, production-ready code following AGENTS.md conventions\n- Respect dont_touch_paths boundaries (stop and ask for approval if restricted change required)\n- After changes, provide clear diff-style summary and list files modified/created\n\n**Restrictions (critical):**\n- NO test execution (unit tests, integration tests)\n- NO build/compile operations (Maven, Gradle)\n- NO deploy or lifecycle management\n- Implement code changes only; user handles validation\""
     },
 
-    // STEP 5: Code review with APPROVE/REJECT decision
+    // STEP 5: Code review (TWO-STEP ORCHESTRATION via OCA)
+    // Flow: OCA validates → Code_Reviewer (APPROVE/REJECT) → Task_Manager (status update)
     "review": {
-      "description": "Manual code review of current session changes (unstaged-first, staged fallback) with APPROVE/REJECT; separates AI blockers vs user warnings",
-      "template": "@Code_Reviewer Review the code changes from this session.\n\n**Context Analysis:**\n1. Use mcp-first skill: analyze unstaged changes via git MCP (if none, fallback to staged changes)\n2. Check AGENTS.md for project-specific conventions\n3. OPTIONAL: If ./tasks.yaml exists and there is an active DOING task, use it as additional context (acceptance criteria, paths_hint, dont_touch_paths)\n4. Distinguish AI-generated vs user-written changes and apply the reject fallback strategy accordingly\n\n**Use code-review-checklist skill:**\n- Apply full checklist (Correctness, Security, Reliability, Maintainability, Performance, Observability, API, Config)\n- Issue clear APPROVE or REJECT decision\n- Provide checklist results, strengths, weaknesses, actionable feedback\n- Separate AI-Generated Code Issues (blockers) from User-Written Code Issues (warnings)\n- Focus on Java/SpringBoot/Quarkus best practices\n\n**Review Scope:** $ARGUMENTS (if empty, review all changes in session)"
+      "description": "Code review with APPROVE/REJECT decision (two-step: Code_Reviewer reviews, then Task_Manager updates status)",
+      "template": "@OCA Orchestrate /review command with two-step delegation.\n\n**Input:** $ARGUMENTS\n\n**Required Orchestration (follow EXACTLY):**\n\n**Step 1: Validate Prerequisites**\n- Check ./tasks.yaml exists (optional for review, but needed for status update)\n- If missing: WARN but continue (review can work without tasks)\n\n**Step 2: Delegate to @Code_Reviewer**\nPass this instruction:\n\"Review the code changes from this session.\n\n**Context Analysis:**\n1. Use git* MCP tools to analyze unstaged changes (if none, fallback to staged changes)\n2. Check AGENTS.md for project-specific conventions\n3. OPTIONAL: If ./tasks.yaml exists and there is an active DOING task, use it as context\n4. Distinguish AI-generated vs user-written changes\n\n**Apply code-review-checklist skill:**\n- Full checklist (Correctness, Reliability, Maintainability, Performance, Observability, Config)\n- Issue clear APPROVE or REJECT decision\n- Separate AI-Generated Code Issues (blockers) from User-Written Code Issues (warnings)\n\n**Review Scope:** $ARGUMENTS (if empty, review all changes)\n\n**Output Format:**\nDecision: [APPROVE/REJECT]\nAI_Blockers: [list or 'none']\nUser_Warnings: [list or 'none']\nSummary: [brief review summary]\n\nTERMINATE after outputting review results.\"\n\n**Step 3: After Code_Reviewer completes, delegate to @Task_Manager**\nPass this instruction with the review results:\n\"Post-review status update.\n\n**Review Decision:** [extract from Code_Reviewer output]\n**AI Blockers:** [extract from Code_Reviewer output]\n**User Warnings:** [extract from Code_Reviewer output]\n\n**Actions required:**\n1. Read tasks.yaml, find task with status=DOING\n2. If no DOING task: Skip status update (review was for non-task changes)\n3. If DOING task found, apply status update:\n   - If APPROVE: DOING → DONE, close Beads issue\n   - If REJECT with AI blockers: DOING → BLOCKED, update Beads with blockers\n   - If REJECT with only user warnings: DOING → DONE (warnings non-blocking)\n4. Output confirmation and TERMINATE\"\n\n**Critical:** Complete BOTH steps before returning to user."
     },
 
-    // STEP 6: Generate Git/SVN commit commands
+    // STEP 6: Commit commands (single agent, no orchestration needed)
     "commit": {
-      "description": "Generate copy-paste Git+SVN staging/commit/push commands and 2-3 Conventional Commit messages (task ref optional, never execute commands)",
-      "template": "@Repo_Manager Generate commit commands for the current changes.\n\n**Context Gathering:**\n1. Use mcp-first skill: analyze changes via git MCP (prefer unstaged diff; if none, use staged diff), also get branch and recent history\n2. OPTIONAL: Read ./tasks.yaml only to add footer \"Refs: T-NNNN\" when there is an active DOING task (otherwise omit task references)\n3. ALWAYS generate BOTH Git and SVN command blocks, unless the user explicitly says \"no SVN\" or \"no Git\"\n\n**Use repo-commit-conventions skill:**\n- Generate Conventional Commits format: type(scope): description\n- Propose 2-3 alternative commit messages for user choice\n- Derive message from actual diff (must cover both AI and human changes)\n\n**Staging selection (interactive):**\n- Ask user to choose:\n  1) Stage ALL changes\n  2) Select FILES to stage (user will paste file paths)\n\n**Output (copy-paste ready):**\n1. Git commands: git status, git diff, git add (based on user choice), git commit -m \"<message>\", git push\n2. SVN commands: svn status, svn add (if needed), svn commit -m \"<message>\"\n\n**Critical:** DO NOT execute git/svn commands automatically. Only provide copy-paste ready commands.\n\n**Scope:** $ARGUMENTS"
+      "description": "Generate copy-paste Git+SVN staging/commit/push commands and 2-3 Conventional Commit messages",
+      "template": "@Repo_Manager Generate commit commands for the current changes.\n\n**Context Gathering:**\n1. Use mcp-first skill: analyze changes via git MCP (prefer unstaged diff; if none, use staged diff), also get branch and recent history\n2. OPTIONAL: Read ./tasks.yaml only to add footer \"Refs: T-NNNN\" when there is exactly one DOING task AND changes touch files in task's paths_hint (otherwise omit task references)\n3. ALWAYS generate BOTH Git and SVN command blocks, unless the user explicitly says \"no SVN\" or \"no Git\"\n\n**Use repo-commit-conventions skill:**\n- Generate Conventional Commits format: type(scope): description\n- Propose 2-3 alternative commit messages for user choice\n- Derive message from actual diff (must cover both AI and human changes)\n\n**Staging selection (interactive):**\n- Ask user to choose:\n  1) Stage ALL changes\n  2) Select FILES to stage (user will paste file paths)\n\n**Output (copy-paste ready):**\n1. Git commands: git status, git diff, git add (based on user choice), git commit -m \"<message>\", git push\n2. SVN commands: svn status, svn add (if needed), svn commit -m \"<message>\"\n\n**Critical:** DO NOT execute git/svn commands automatically. Only provide copy-paste ready commands.\n\n**Scope:** $ARGUMENTS"
     }
   },
 
-  // Automatic update notification settings
+  // ============================================================================
+  // UI AND BEHAVIOR SETTINGS
+  // ============================================================================
   "autoupdate": "notify",
-
-  // Session sharing configuration
   "share": "disabled",
-
-  // Terminal UI theme
   "theme": "ayu",
 
-  // Terminal UI settings
   "tui": {
     "scroll_speed": 3,
     "scroll_acceleration": { "enabled": true },
@@ -92,15 +110,15 @@
       ".evo/**",
       ".yo-rc.json",
       "yo-rc-global.json",
-      "target/**",        // Maven build output
-      "build/**",         // Gradle build output
-      ".mvn/**",          // Maven wrapper
-      ".gradle/**",       // Gradle cache
-      ".idea/**",         // IntelliJ IDEA
-      ".vscode/**",       // VSCode
-      "*.class",          // Java compiled classes
-      "*.jar",            // Java archives
-      "*.war"             // Web archives
+      "target/**",
+      "build/**",
+      ".mvn/**",
+      ".gradle/**",
+      ".idea/**",
+      ".vscode/**",
+      "*.class",
+      "*.jar",
+      "*.war"
     ]
   },
 
@@ -110,7 +128,10 @@
     "prune": true
   },
 
-  // Global permission baseline (security-first: deny by default, explicit allow per agent)
+  // ============================================================================
+  // GLOBAL PERMISSIONS AND TOOLS (Security-first baseline)
+  // ============================================================================
+  // Default: deny all. Each agent explicitly enables what it needs.
   "permission": {
     "read": "deny",
     "list": "deny",
@@ -132,7 +153,6 @@
     "doom_loop": "ask"
   },
 
-  // Global tools baseline (security-first: disabled by default, explicit enable per agent)
   "tools": {
     "read": false,
     "list": false,
@@ -150,12 +170,19 @@
     "memory*": false
   },
 
-  // Agent configurations: each agent has specific role, permissions, and tools
+  // ============================================================================
+  // AGENT CONFIGURATIONS
+  // ============================================================================
   "agent": {
 
-    // === PRIMARY AGENT: OCA (OpenCode Administrator) ===
+    // =========================================================================
+    // PRIMARY AGENT: OCA (OpenCode Administrator)
+    // =========================================================================
+    // Role: Orchestrator for workflow commands. Validates prerequisites and
+    //       manages multi-step delegations (/plan, /review).
+    // Does NOT: Implement code, modify tasks.yaml directly, execute builds.
     "OCA": {
-      "description": "Primary orchestrator. Routes commands to sub-agents, validates workflow state, delegates code implementation to plan/build agents.",
+      "description": "Primary orchestrator. Validates workflow state, routes commands to sub-agents, manages two-step delegations for /plan and /review.",
       "prompt": "{file:./prompts/oca.txt}",
       "mode": "primary",
       "reasoningEffort": "high",
@@ -170,11 +197,11 @@
         "write": "deny",
         "lsp": "allow",
         "skill": "allow",
-        "webfetch": "allow",
+        "webfetch": "deny",
         "task": "allow",
         "git*": "allow",
-        "github*": "allow",
-        "memory*": "allow"
+        "github*": "deny",
+        "memory*": "deny"
       },
       "tools": {
         "read": true,
@@ -183,26 +210,31 @@
         "grep": true,
         "lsp": true,
         "skill": true,
-        "webfetch": true,
+        "webfetch": false,
         "task": true,
         "bash": false,
         "edit": false,
         "write": false,
         "git*": true,
-        "github*": true,
-        "memory*": true
+        "github*": false,
+        "memory*": false
       },
-      "max_steps": 5,
+      "max_steps": 15,
       "temperature": 0.2
     },
 
-    // === SUB-AGENT 1: Project_Initializer ===
+    // =========================================================================
+    // SUB-AGENT: Project_Initializer
+    // =========================================================================
+    // Role: One-time project setup. Creates AGENTS.md, tasks.yaml, .gitignore,
+    //       initializes git, beads, and ./plans/ directory.
+    // Trigger: /init command
     "Project_Initializer": {
-      "description": "Project initialization specialist. Creates AGENTS.md, tasks.yaml, .gitignore, runs git init, creates ./plans/ directory. Executes once per project.",
+      "description": "Project initialization specialist. Creates AGENTS.md, tasks.yaml, .gitignore, runs git init, beads:init, creates ./plans/. Executes ONCE per project.",
       "prompt": "{file:./prompts/project_initializer.txt}",
       "mode": "subagent",
       "reasoningEffort": "medium",
-      "textVerbosity": "low",
+      "textVerbosity": "medium",
       "permissions": {
         "read": "allow",
         "list": "allow",
@@ -235,13 +267,19 @@
         "github*": false,
         "memory*": false
       },
-      "max_steps": 10,
+      "max_steps": 15,
       "temperature": 0.2
     },
 
-    // === SUB-AGENT 2: Task_Manager ===
+    // =========================================================================
+    // SUB-AGENT: Task_Manager
+    // =========================================================================
+    // Role: Authoritative manager for tasks.yaml. Creates tasks, manages status
+    //       transitions, handles Beads integration via @beads-task-agent.
+    // Triggers: /add-task, delegation from OCA for /plan and /review
+    // Note: Delegates Beads operations to @beads-task-agent (from opencode-beads plugin)
     "Task_Manager": {
-      "description": "Task manager for ./tasks.yaml. Creates tasks (T-NNNN IDs), updates status, manages Beads integration for persistence. tasks.yaml is source of truth.",
+      "description": "Task manager for ./tasks.yaml. Creates tasks (T-NNNN IDs), updates status (TODO/DOING/DONE/BLOCKED/SKIP), manages Beads integration. tasks.yaml is source of truth.",
       "prompt": "{file:./prompts/task_manager.txt}",
       "mode": "subagent",
       "reasoningEffort": "high",
@@ -256,11 +294,11 @@
         "write": "allow",
         "lsp": "deny",
         "skill": "allow",
-        "webfetch": "allow",
+        "webfetch": "deny",
         "task": "allow",
         "git*": "deny",
         "github*": "deny",
-        "memory*": "allow"
+        "memory*": "deny"
       },
       "tools": {
         "read": true,
@@ -272,20 +310,29 @@
         "bash": false,
         "task": true,
         "skill": true,
-        "webfetch": true,
+        "webfetch": false,
         "lsp": false,
         "git*": false,
         "github*": false,
-        "memory*": true
+        "memory*": false
       },
-      "max_steps": 10,
+      "max_steps": 12,
       "temperature": 0.2
     },
 
+    // =========================================================================
+    // SUB-AGENT: plan
+    // =========================================================================
+    // Role: Implementation planning specialist. Analyzes codebase and creates
+    //       detailed implementation plans saved to ./plans/plan-<task-id>.md.
+    // Trigger: Delegation from OCA after Task_Manager completes TODO→DOING
+    // Expects: Task already in DOING status (set by Task_Manager)
     "plan": {
-      "description": "Implementation planning specialist. Creates ./plans/plan-<task-id>.md",
+      "description": "Implementation planning specialist. Creates ./plans/plan-<task-id>.md for task in DOING status. Does NOT update task status (Task_Manager already did).",
       "prompt": "{file:./prompts/plan.txt}",
       "mode": "subagent",
+      "reasoningEffort": "high",
+      "textVerbosity": "medium",
       "permissions": {
         "read": "allow",
         "list": "allow",
@@ -295,22 +342,53 @@
         "write": "allow",
         "bash": "deny",
         "lsp": "allow",
-        "skill": "allow"
+        "skill": "allow",
+        "webfetch": "deny",
+        "task": "deny",
+        "git*": "deny",
+        "github*": "deny",
+        "memory*": "deny"
       },
       "tools": {
         "read": true,
+        "list": true,
         "glob": true,
         "grep": true,
         "edit": true,
         "write": true,
         "lsp": true,
-        "skill": true
-      }
+        "skill": true,
+        "bash": false,
+        "webfetch": false,
+        "task": false,
+        "git*": false,
+        "github*": false,
+        "memory*": false
+      },
+      "max_steps": 15,
+      "temperature": 0.3
     },
 
-    // === SUB-AGENT 3: Code_Reviewer ===
+    // =========================================================================
+    // BUILT-IN AGENT: build
+    // =========================================================================
+    // Role: Implementation specialist. Reads plan from ./plans/plan-<task-id>.md
+    //       and implements code changes following the checklist.
+    // Trigger: Delegation from OCA after /build validation
+    // Note: Uses OpenCode's default build agent. No custom prompt needed.
+    //       Permissions/tools inherited from OpenCode defaults.
+    // IMPORTANT: build agent does NOT update task status. Status remains DOING
+    //            until /review is run and approved.
+
+    // =========================================================================
+    // SUB-AGENT: Code_Reviewer
+    // =========================================================================
+    // Role: Read-only code quality specialist. Reviews changes against checklist,
+    //       issues APPROVE/REJECT decision, distinguishes AI blockers vs user warnings.
+    // Trigger: Delegation from OCA for /review (first step)
+    // Note: Does NOT update task status. OCA delegates to Task_Manager after review.
     "Code_Reviewer": {
-      "description": "Read-only code quality specialist. Reviews code against tasks.yaml requirements and best practices. Issues APPROVE/REJECT decision with actionable feedback.",
+      "description": "Read-only code quality specialist. Reviews code against checklist and best practices. Issues APPROVE/REJECT with actionable feedback. Separates AI blockers from user warnings.",
       "prompt": "{file:./prompts/code_reviewer.txt}",
       "mode": "subagent",
       "reasoningEffort": "high",
@@ -325,9 +403,9 @@
         "write": "deny",
         "lsp": "allow",
         "skill": "allow",
-        "webfetch": "allow",
+        "webfetch": "deny",
         "task": "deny",
-        "git*": "deny",
+        "git*": "allow",
         "github*": "deny",
         "memory*": "deny"
       },
@@ -339,21 +417,27 @@
         "lsp": true,
         "bash": false,
         "skill": true,
-        "webfetch": true,
+        "webfetch": false,
         "edit": false,
         "write": false,
         "task": false,
-        "git*": false,
+        "git*": true,
         "github*": false,
         "memory*": false
       },
-      "max_steps": 10,
+      "max_steps": 12,
       "temperature": 0.1
     },
 
-    // === SUB-AGENT 4: Repo_Manager ===
+    // =========================================================================
+    // SUB-AGENT: Repo_Manager
+    // =========================================================================
+    // Role: Repository command generator. Analyzes changes via MCP, generates
+    //       copy-paste ready Git+SVN commands with Conventional Commit messages.
+    // Trigger: /commit command
+    // CRITICAL: NEVER executes git/svn commands. Only generates copy-paste output.
     "Repo_Manager": {
-      "description": "Repository command generator for Git and SVN. Analyzes changes, generates copy-paste ready shell commands with conventional commit messages. NEVER executes commands automatically.",
+      "description": "Repository command generator for Git and SVN. Analyzes changes, generates copy-paste ready commands with Conventional Commit messages. NEVER executes commands automatically.",
       "prompt": "{file:./prompts/repo_manager.txt}",
       "mode": "subagent",
       "reasoningEffort": "high",
@@ -365,13 +449,13 @@
         "grep": "allow",
         "bash": "allow",
         "edit": "deny",
-        "write": "allow",
+        "write": "deny",
         "lsp": "deny",
         "skill": "allow",
         "webfetch": "deny",
         "task": "deny",
         "git*": "allow",
-        "github*": "allow",
+        "github*": "deny",
         "memory*": "deny"
       },
       "tools": {
@@ -380,25 +464,37 @@
         "grep": true,
         "read": true,
         "list": true,
-        "write": true,
+        "write": false,
         "skill": true,
         "edit": false,
         "lsp": false,
         "webfetch": false,
         "task": false,
         "git*": true,
-        "github*": true,
+        "github*": false,
         "memory*": false
       },
       "max_steps": 10,
       "temperature": 0.1
     }
+
+    // =========================================================================
+    // PLUGIN AGENT: beads-task-agent (provided by opencode-beads)
+    // =========================================================================
+    // Role: Handles Beads operations (create/update/close issues).
+    // Trigger: Delegation from Task_Manager for Beads sync.
+    // Note: This agent is provided by the opencode-beads plugin, not configured here.
+    //       Task_Manager delegates to @beads-task-agent for all Beads operations.
   },
 
-  // MCP (Model Context Protocol) servers configuration
+  // ============================================================================
+  // MCP (Model Context Protocol) SERVERS
+  // ============================================================================
   "mcp": {
     
-    // Local Git MCP server
+    // Local Git MCP server - Primary tool for repository inspection
+    // Tools: status, diff, log, branch, etc.
+    // Note: Verify available tools match what agents expect (e.g., blame may not exist)
     "git": {
       "type": "local",
       "command": ["npx", "-y", "@cyanheads/git-mcp-server"],
@@ -411,7 +507,8 @@
       "timeout": 60000
     },
 
-    // Remote GitHub MCP server
+    // Remote GitHub MCP server - For GitHub-specific operations (PRs, issues, etc.)
+    // Currently READ-ONLY (X-MCP-Readonly: true)
     "github": {
       "type": "remote",
       "url": "https://api.githubcopilot.com/mcp",
@@ -424,7 +521,9 @@
       "timeout": 15000
     },
 
-    // Local Memory MCP server (knowledge graph persistence)
+    // Local Memory MCP server - Knowledge graph persistence
+    // Used for: user preferences, repo conventions, stable context
+    // NOT used for: secrets, credentials, sensitive data
     "memory": {
       "type": "local",
       "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],

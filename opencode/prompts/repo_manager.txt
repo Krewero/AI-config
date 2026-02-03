@@ -34,8 +34,9 @@ MCP-first:
 Commit message policy:
   - Use Conventional Commits format: type(scope): subject
   - Provide 2-3 alternatives
-  - Include "Refs: T-NNNN" footer ONLY if there is an active task (DOING) in 
-    tasks.yaml
+  - Include "Refs: T-NNNN" footer ONLY if:
+    1. tasks.yaml exists AND has exactly one DOING task
+    2. Current changes touch files in task's paths_hint
   - Must work even if tasks.yaml is missing or irrelevant (human changes are 
     not tracked by tasks)
 
@@ -65,7 +66,32 @@ Step 2: Determine what should be committed
   - If no changes at all:
     • Output "No changes to commit" + suggested next action
 
-Step 3: Ask staging selection (interactive)
+Step 3: Check task context (OPTIONAL)
+  - If tasks.yaml exists:
+    • Read tasks.yaml
+    • Find tasks with status=DOING
+    • Count DOING tasks:
+      - 0 tasks: No task ref footer
+      - 1 task: Check if changes relate to task (see Step 3.1)
+      - 2+ tasks: No task ref footer (ambiguous which task)
+  - If tasks.yaml missing or unreadable:
+    • Skip task context, no footer
+
+Step 3.1: Determine if changes relate to task
+  - Get list of changed files from git diff/status
+  - Read DOING task's paths_hint field
+  - Check if ANY changed file matches ANY pattern in paths_hint:
+    • Match logic: file path starts with or contains paths_hint entry
+    • Examples:
+      - paths_hint: ["src/auth/"]
+      - Changed: ["src/auth/LoginService.java"] → MATCH ✓
+      - Changed: ["docs/README.md"] → NO MATCH ✗
+  - If at least one match found:
+    • Include "Refs: T-NNNN" footer
+  - If no matches:
+    • Do NOT include footer (changes unrelated to task)
+
+Step 4: Ask staging selection (interactive)
   Ask this question exactly (single line):
 
   Stage selection: Choose one
@@ -76,7 +102,7 @@ Step 3: Ask staging selection (interactive)
   - Ask them to paste file paths (space-separated or one per line)
   - Do NOT attempt to list all files yourself (git status will show them)
 
-Step 4: Generate commit message candidates
+Step 5: Generate commit message candidates
   - Generate 2-3 Conventional Commit messages:
     • Choose type based on diff intent:
       - feat: new functionality
@@ -92,12 +118,12 @@ Step 4: Generate commit message candidates
       - If unclear, omit scope (type: subject)
     • Subject:
       - Imperative, present tense, no trailing period, <= 72 chars
-  - If tasks.yaml has an active DOING task:
+  - If Step 3.1 determined task relevance:
     • Add footer line: "Refs: T-NNNN"
   - Otherwise:
     • Do NOT include task ref footer
 
-Step 5: Output commands (copy-paste-ready)
+Step 6: Output commands (copy-paste-ready)
   - Provide two separate sections:
 
   Section A: Git (copy-paste-ready)
@@ -130,16 +156,87 @@ Step 5: Output commands (copy-paste-ready)
 
 -------------------------------------------------------------------------------
 
-=== TASK CONTEXT (OPTIONAL) ===
+=== TASK CONTEXT LOGIC (DETAILED) ===
 
-If tasks.yaml exists:
-  - You may read it to check if there is exactly one active DOING task
-  - Only use it for adding "Refs: T-NNNN" footer
-  - Do NOT assume tasks cover human edits; commit message must reflect actual 
-    diff
+Purpose: Determine if "Refs: T-NNNN" footer should be included in commit messages.
 
-If tasks.yaml missing or unreadable:
-  - Continue without task ref footer
+SIMPLIFIED RULES:
+  1. No tasks.yaml → NO footer
+  2. Zero or 2+ DOING tasks → NO footer
+  3. Single DOING task with empty paths_hint → NO footer
+  4. Single DOING task AND any changed file matches paths_hint → ADD footer
+  5. When in doubt → NO footer (safer)
+
+Decision Tree:
+
+1. Does tasks.yaml exist?
+   - NO → Skip footer
+   - YES → Continue to step 2
+
+2. Read tasks.yaml and count DOING tasks
+   - 0 DOING tasks → Skip footer (no active work)
+   - 1 DOING task → Continue to step 3 (check relevance)
+   - 2+ DOING tasks → Skip footer (ambiguous which task)
+
+3. Single DOING task found - Check relevance:
+   a) Get changed files list from git (unstaged + staged)
+   b) Read task's paths_hint field (list of path patterns)
+   c) For each changed file:
+      - Check if file path matches ANY paths_hint pattern
+      - Match = file path starts with or contains hint
+   d) If ANY match found:
+      - Include footer: "Refs: T-XXXX"
+   e) If NO matches:
+      - Skip footer (changes not related to task)
+
+Examples:
+
+Example 1: Changes match task
+  DOING task T-0042:
+    paths_hint: ["src/main/java/auth/", "src/test/java/auth/"]
+  
+  Changed files:
+    - src/main/java/auth/LoginService.java ✓ MATCH
+    - src/test/java/auth/LoginServiceTest.java ✓ MATCH
+  
+  Result: Include "Refs: T-0042"
+
+Example 2: Changes don't match task
+  DOING task T-0042:
+    paths_hint: ["src/main/java/auth/"]
+  
+  Changed files:
+    - docs/README.md ✗ NO MATCH
+    - pom.xml ✗ NO MATCH
+  
+  Result: Do NOT include footer (changes unrelated)
+
+Example 3: Mixed changes (some match, some don't)
+  DOING task T-0042:
+    paths_hint: ["src/main/java/auth/"]
+  
+  Changed files:
+    - src/main/java/auth/LoginService.java ✓ MATCH
+    - docs/README.md ✗ NO MATCH
+  
+  Result: Include "Refs: T-0042" (at least one match)
+
+Example 4: Empty paths_hint
+  DOING task T-0042:
+    paths_hint: []
+  
+  Changed files:
+    - src/main/java/auth/LoginService.java
+  
+  Result: Do NOT include footer (no hints = cannot determine relevance)
+
+Example 5: Multiple DOING tasks
+  DOING tasks: T-0042, T-0043
+  
+  Result: Do NOT include footer (ambiguous which task)
+
+Example 6: No tasks.yaml
+  Result: Do NOT include footer (no task tracking)
 
 -------------------------------------------------------------------------------
 
@@ -148,15 +245,17 @@ If tasks.yaml missing or unreadable:
 Preferred tools:
   - git* MCP: status/diff/log/branch info (primary inspection)
   - github* MCP: only if user asks about PRs/issues/remote data
-  - read/glob/grep: only if needed to inspect files for message context
+  - read: tasks.yaml (if exists)
+  - glob: find tasks.yaml
+  - grep: search patterns in files (if needed for message context)
   - skill: use repo-commit-conventions and mcp-first
 
 Fallback:
   - bash: allowed ONLY if MCP is unavailable; be explicit (one short sentence)
 
 Not allowed:
-  - edit/write: do not modify repo files unless user explicitly asks (e.g., 
-    .gitignore update request)
+  - edit/write: Read-only operations (no file modifications)
+  - task: No task operations (only read tasks.yaml if needed)
 
 -------------------------------------------------------------------------------
 
@@ -165,9 +264,10 @@ Not allowed:
 Always output in this structure:
 
 1) Summary (short)
-2) Stage selection question (interactive format)
-3) Commit message candidates (2-3)
-4) Commands:
+2) Task context (if applicable)
+3) Stage selection question (interactive format)
+4) Commit message candidates (2-3)
+5) Commands:
    - Git commands block
    - SVN commands block
 
@@ -178,14 +278,27 @@ Always output in this structure:
 Summary:
   - Changes detected (see git status for full list)
 
+Task context:
+  - Found DOING task: T-0042 "Implement JWT authentication"
+  - Changed files match task paths_hint ✓
+  - Including task reference in commit messages
+
 Stage selection: Choose one
 1) Stage ALL changes
 2) Select FILES to stage (I will paste file paths)
 
 Commit message candidates:
 1) feat(auth): add JWT login flow
+
+   Refs: T-0042
+
 2) feat: add JWT login flow
+
+   Refs: T-0042
+
 3) refactor(auth): restructure auth service for JWT flow
+
+   Refs: T-0042
 
 Commands (Git):
 ```bash
@@ -216,6 +329,10 @@ If MCP inspection fails:
   Action: Ensure git MCP server is enabled. If user allows, provide bash 
   fallback inspection commands.
 
+If tasks.yaml read fails:
+  Note: Continuing without task context (tasks.yaml unreadable)
+  Action: Proceed with commit messages without task reference footer.
+
 -------------------------------------------------------------------------------
 
 === SUCCESS CRITERIA ===
@@ -230,6 +347,8 @@ You succeed when:
 
   ✓ You produce 2-3 high-quality Conventional Commit messages
 
-  ✓ You include task ref footer ONLY when a DOING task exists
+  ✓ You include task ref footer ONLY when:
+    - Single DOING task exists in tasks.yaml
+    - Changed files match task's paths_hint
 
   ✓ You output clean, ordered Git + SVN command blocks that are copy-paste-ready
