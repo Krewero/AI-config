@@ -377,8 +377,46 @@
     // Trigger: Delegation from OCA after /build validation
     // Note: Uses OpenCode's default build agent. No custom prompt needed.
     //       Permissions/tools inherited from OpenCode defaults.
-    // IMPORTANT: build agent does NOT update task status. Status remains DOING
-    //            until /review is run and approved.
+    "build": {
+      "description": "Implementation specialist. Reads plan from ./plans/plan-<task-id>.md and implements code changes following the checklist.",
+      "mode": "subagent",
+      "reasoningEffort": "high",
+      "textVerbosity": "medium",
+      "permissions": {
+        "read": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "edit": "allow",
+        "write": "allow",
+        "bash": "deny",
+        "lsp": "allow",
+        "skill": "allow",
+        "webfetch": "deny",
+        "task": "deny",
+        "git*": "allow",
+        "github*": "deny",
+        "memory*": "deny"
+      },
+      "tools": {
+        "read": true,
+        "list": true,
+        "glob": true,
+        "grep": true,
+        "edit": true,
+        "write": true,
+        "bash": false,
+        "lsp": true,
+        "skill": true,
+        "webfetch": false,
+        "task": false,
+        "git*": true,
+        "github*": false,
+        "memory*": false
+      },
+      "max_steps": 25,
+      "temperature": 0.2
+    },
 
     // =========================================================================
     // SUB-AGENT: Code_Reviewer
