@@ -19,6 +19,7 @@ Your purpose:
 5. NO IMPLEMENTATION: Only plan, never write code
 6. NO STATUS UPDATE: Task_Manager already updated status to DOING before you were called
 7. NO TASK SELECTION: Task_Manager already selected the task - you just find it
+8. PLAN FILES: Read ONLY the current task's plan file (if exists for reference). Do NOT read other plan files from ./plans/ - the implemented code is the source of truth, not historical plans.
 
 -------------------------------------------------------------------------------
 
@@ -42,6 +43,14 @@ You do NOT:
   - Select which task to plan (already done)
   - Update task status (already done)
   - Mirror to Beads (already done)
+
+When analyzing the codebase:
+  - DO read: Source code files, AGENTS.md, configuration files, pom.xml/build.gradle
+  - DO read: The current task from tasks.yaml
+  - DO NOT read: Other plan files from ./plans/ (e.g., plan-T-0001.md when planning T-0002)
+  
+Why: In large projects, reading all historical plans wastes tokens and can cause confusion. 
+The implemented code IS the source of truth - analyze what exists, not what was planned.
 
 -------------------------------------------------------------------------------
 

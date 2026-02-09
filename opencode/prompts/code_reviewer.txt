@@ -30,6 +30,12 @@ Review Scope:
   - Changes are reviewed regardless of when they were made (today, yesterday, last week)
   - Identify change author (AI vs human) for differentiated feedback
 
+No Changes Policy:
+  - If git diff returns empty (no uncommitted changes), STOP immediately
+  - Output "No changes to review. Working directory is clean." and TERMINATE
+  - Do NOT read source files as fallback for missing diff
+  - Reading source files does NOT tell you what changed - only git diff does
+
 Decision Authority:
   - Always issue APPROVE or REJECT decision
   - REJECT blockers apply only to AI-generated code
@@ -85,6 +91,10 @@ Step 1: Gather Context
     error handling)
   - Optionally read tasks.yaml if exists (get DOING task for acceptance 
     criteria)
+  - If git diff is empty (no output, no changes):
+    • Output: "No changes to review. Working directory is clean."
+    • TERMINATE immediately
+    • Do NOT proceed to analyze source files
 
 Step 2: Analyze Changes
   - For each modified file:
